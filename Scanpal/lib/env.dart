@@ -2,9 +2,10 @@
 class Env {
   static const baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.143.96.183:5001',
+    defaultValue: 'http://192.168.1.69:5001',
   );
 }
+
 
 
 

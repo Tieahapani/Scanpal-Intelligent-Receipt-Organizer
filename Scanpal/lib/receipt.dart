@@ -76,8 +76,11 @@ class Receipt {
   final String? provider;   // "azure" (optional)
   final Map<String, double>? confidences; // optional debug/QA
   final List<String>? rawLines;
-  final String? category;   // ✅ Category from Gemini backend
-  final String? currency;   // ✅ NEW: Currency from Gemini backend
+  final String? category;
+  final String? currency;
+  final String? tripId;
+  final String? travelCategory;
+  final String? imageUrl;
 
   const Receipt({
     required this.id,
@@ -93,7 +96,10 @@ class Receipt {
     this.confidences,
     this.rawLines,
     this.category,
-    this.currency,  // ✅ NEW
+    this.currency,
+    this.tripId,
+    this.travelCategory,
+    this.imageUrl,
   });
 
   factory Receipt.fromMap(Map<String, dynamic> m) {
@@ -111,7 +117,7 @@ class Receipt {
 
     // Parse ISO-like date string if present
     DateTime? parsedDate;
-    final dateVal = m['date'];
+    final dateVal = m['date'] ?? m['receipt_date'];
     if (dateVal != null) {
       parsedDate = DateTime.tryParse(dateVal.toString());
     }
@@ -131,7 +137,7 @@ class Receipt {
     }
 
     return Receipt(
-      id: (m['id'] ?? DateTime.now().millisecondsSinceEpoch.toString()).toString(),
+      id:  (m['receipt_id'] ?? m['id'] ?? DateTime.now().millisecondsSinceEpoch.toString()).toString(),
       merchant: m['merchant']?.toString(),
       date: parsedDate,
       address: m['address']?.toString(),
@@ -144,7 +150,10 @@ class Receipt {
       confidences: conf,
       rawLines: (m['raw_lines'] as List?)?.map((e) => e.toString()).toList(),
       category: m['category']?.toString(),
-      currency: m['currency']?.toString() ?? '\$',  // ✅ NEW: Parse currency from backend with fallback
+      currency: m['currency']?.toString() ?? '\$',
+      tripId: m['trip_id']?.toString(),
+      travelCategory: (m['travel_category'] ?? m['category'])?.toString(),
+      imageUrl: m['image_url']?.toString(),
     );
   }
 

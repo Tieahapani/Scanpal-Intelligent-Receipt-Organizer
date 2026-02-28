@@ -1,82 +1,52 @@
 import 'package:flutter/material.dart';
-import 'package:isar/isar.dart';
-import 'local_db.dart';
-import 'entities.dart';
+import 'auth_service.dart';
+import 'models/user.dart';
 import 'login_page.dart';
-import 'register_page.dart';
-import 'home_screen.dart';
-import 'onboarding_page.dart';
-import 'welcome_page.dart';
+import 'traveler_home_page.dart';
+import 'admin_home_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ Open Isar before runApp
-  final isar = await LocalDb.instance();
+  final auth = AuthService.instance;
+  final token = await auth.getToken();
+  final user = await auth.getUser();
 
-  // ✅ Check if a user has rememberMe = true
-  final rememberedUser = await isar.userEntitys
-      .filter()
-      .rememberMeEqualTo(true)
-      .findFirst();
+  debugPrint('=== SESSION CHECK ===');
+  debugPrint('Token present: ${token != null}');
+  debugPrint('Token value: ${token?.substring(0, 10)}...');
+  debugPrint('User present: ${user != null}');
+  debugPrint('User email: ${user?.email}');
+  debugPrint('=== END SESSION CHECK ===');
 
   runApp(MyApp(
-    autoLogin: rememberedUser != null,
+    isLoggedIn: token != null && user != null,
+    user: user,
   ));
 }
 
 class MyApp extends StatefulWidget {
-  final bool autoLogin;
+  final bool isLoggedIn;
+  final AppUser? user;
 
-  const MyApp({super.key, required this.autoLogin});
+  const MyApp({super.key, required this.isLoggedIn, this.user});
 
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
-  // ✅ Theme state
-  bool darkMode = false;
-
-  // ✅ Called when user toggles theme in ProfilePage
-  void toggleDarkMode(bool value) {
-    setState(() {
-      darkMode = value;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'ScanPal',
-
-      // ✅ Dynamic theme switching
-      themeMode: darkMode ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData.light(),
-      darkTheme: ThemeData.dark(),
-
-      // ✅ Home based on auto-login
-      home: widget.autoLogin
-          ? HomeScreen(
-              darkMode: darkMode,
-              onThemeChanged: toggleDarkMode,
-            )
-          : WelcomePage(),
-
-      // ✅ Routes
-      routes: {
-        '/welcome': (_) => WelcomePage(),
-        '/login': (_) => LoginPage(),
-        '/register': (_) => RegisterPage(),
-        '/onboarding': (_) => OnboardingPage(),
-
-        // ✅ Home route also supports dark mode
-        '/home': (_) => HomeScreen(
-              darkMode: darkMode,
-              onThemeChanged: toggleDarkMode,
-            ),
-      },
+      home: widget.isLoggedIn
+          ? (widget.user!.isAdmin
+              ? AdminHomePage(user: widget.user!)
+              : TravelerHomePage(user: widget.user!))
+          : const LoginPage(),
     );
   }
 }
