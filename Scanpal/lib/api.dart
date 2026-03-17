@@ -15,7 +15,8 @@ sealed class LoginResponse {}
 class LoginSuccess extends LoginResponse {
   final String token;
   final AppUser user;
-  LoginSuccess({required this.token, required this.user});
+  final bool needsPassword;
+  LoginSuccess({required this.token, required this.user, this.needsPassword = false});
 }
 
 class LoginNeedsRegistration extends LoginResponse {}
@@ -24,6 +25,13 @@ class LoginOtpSent extends LoginResponse {
   final String email;
   final String purpose; // "login" or "register"
   LoginOtpSent({required this.email, required this.purpose});
+}
+
+class AuthExpiredException implements Exception {
+  final String message;
+  AuthExpiredException([this.message = 'Token expired']);
+  @override
+  String toString() => message;
 }
 
 class APIService {
@@ -45,12 +53,58 @@ class APIService {
     };
   }
 
+  // ─── Response Check ─────────────────────────────────
+
+  void _checkResponse(http.Response res, {int expected = 200}) {
+    if (res.statusCode == 401) {
+      throw AuthExpiredException();
+    }
+    if (res.statusCode != expected) {
+      final body = jsonDecode(res.body);
+      final error = body['error'] ?? 'Request failed (${res.statusCode})';
+      throw Exception(error);
+    }
+  }
+
+  // ─── Auto Re-Auth ───────────────────────────────────
+
+  bool _reAuthInProgress = false;
+
+  Future<bool> _tryReAuth() async {
+    if (_reAuthInProgress) return false;
+    _reAuthInProgress = true;
+    try {
+      final creds = await AuthService.instance.getSavedCredentials();
+      if (creds == null) return false;
+      debugPrint('Token expired, attempting auto re-login for ${creds.email}');
+      final res = await login(creds.email, password: creds.password, rememberMe: true);
+      if (res is LoginSuccess) {
+        await AuthService.instance.saveSession(res.token, res.user, remember: true);
+        debugPrint('Auto re-login successful');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Auto re-login failed: $e');
+      return false;
+    } finally {
+      _reAuthInProgress = false;
+    }
+  }
+
   // ─── Retry Wrapper ────────────────────────────────────
 
   Future<T> _withRetry<T>(Future<T> Function() fn) async {
     for (int attempt = 0; attempt <= _maxRetries; attempt++) {
       try {
         return await fn();
+      } on AuthExpiredException {
+        // Token expired — try to re-login with saved credentials
+        if (attempt < _maxRetries && await _tryReAuth()) {
+          debugPrint('Re-auth succeeded, retrying request...');
+          continue;
+        }
+        rethrow;
       } on SocketException {
         if (attempt == _maxRetries) rethrow;
         debugPrint('Connection failed, retry ${attempt + 1}/$_maxRetries...');
@@ -73,13 +127,18 @@ class APIService {
   Future<LoginResponse> login(
     String email, {
     bool rememberMe = true,
+    String? password,
     String? name,
     String? department,
   }) async {
     final uri = Uri.parse('$baseUrl/auth/login');
     debugPrint('POST $uri');
 
-    final body = <String, dynamic>{'email': email};
+    final body = <String, dynamic>{
+      'email': email,
+      'remember_me': rememberMe,
+    };
+    if (password != null && password.isNotEmpty) body['password'] = password;
     if (name != null) body['name'] = name;
     if (department != null) body['department'] = department;
 
@@ -128,7 +187,7 @@ class APIService {
     final res = await http
         .post(uri,
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'email': email, 'code': code}))
+            body: jsonEncode({'email': email, 'code': code, 'remember_me': rememberMe}))
         .timeout(_timeout);
 
     debugPrint('RESP ${res.statusCode}: ${res.body}');
@@ -141,9 +200,25 @@ class APIService {
     final data = jsonDecode(res.body);
     final user = AppUser.fromMap(data['user']);
     final token = data['token'] as String;
+    final needsPassword = data['needs_password'] == true;
 
     await AuthService.instance.saveSession(token, user, remember: rememberMe);
-    return LoginSuccess(token: token, user: user);
+    return LoginSuccess(token: token, user: user, needsPassword: needsPassword);
+  }
+
+  /// Set password for the authenticated user (max 8 characters).
+  Future<void> setPassword(String password) async {
+    final uri = Uri.parse('$baseUrl/auth/set-password');
+    final headers = await _authHeaders();
+
+    final res = await http
+        .post(uri, headers: headers, body: jsonEncode({'password': password}))
+        .timeout(_timeout);
+
+    if (res.statusCode != 200) {
+      final error = jsonDecode(res.body)['error'] ?? 'Failed to set password';
+      throw Exception(error);
+    }
   }
 
   // ─── Trips ────────────────────────────────────────────
@@ -155,43 +230,40 @@ class APIService {
 
       final res = await http.get(uri, headers: headers).timeout(_timeout);
       debugPrint('GET /trips${sync ? '?sync=true' : ''} ${res.statusCode}');
-
-      if (res.statusCode != 200) {
-        throw Exception('Failed to fetch trips: ${res.statusCode}');
-      }
+      _checkResponse(res);
 
       final List<dynamic> data = jsonDecode(res.body);
       return data.map((item) => Trip.fromMap(Map<String, dynamic>.from(item))).toList();
     });
   }
 
-  Future<Trip> createTrip({
-    required String tripPurpose,
-    required String destination,
-    DateTime? departureDate,
-    DateTime? returnDate,
-  }) async {
+  Future<Trip> createTrip(Map<String, dynamic> data) async {
     return _withRetry(() async {
       final uri = Uri.parse('$baseUrl/trips');
       final headers = await _authHeaders();
 
-      final body = <String, dynamic>{
-        'trip_purpose': tripPurpose,
-        'destination': destination,
-        if (departureDate != null) 'departure_date': departureDate.toIso8601String(),
-        if (returnDate != null) 'return_date': returnDate.toIso8601String(),
-      };
-
       final res = await http
-          .post(uri, headers: headers, body: jsonEncode(body))
+          .post(uri, headers: headers, body: jsonEncode(data))
           .timeout(_timeout);
 
       debugPrint('POST /trips ${res.statusCode}');
+      _checkResponse(res, expected: 201);
 
-      if (res.statusCode != 201) {
-        final error = jsonDecode(res.body)['error'] ?? 'Failed to create trip';
-        throw Exception(error);
-      }
+      return Trip.fromMap(jsonDecode(res.body));
+    });
+  }
+
+  Future<Trip> updateTrip(String tripId, Map<String, dynamic> updates) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/trips/$tripId');
+      final headers = await _authHeaders();
+
+      final res = await http
+          .put(uri, headers: headers, body: jsonEncode(updates))
+          .timeout(_timeout);
+
+      debugPrint('PUT /trips/$tripId ${res.statusCode}');
+      _checkResponse(res);
 
       return Trip.fromMap(jsonDecode(res.body));
     });
@@ -204,10 +276,7 @@ class APIService {
 
       final res = await http.get(uri, headers: headers).timeout(_timeout);
       debugPrint('GET /trips/$tripId ${res.statusCode}');
-
-      if (res.statusCode != 200) {
-        throw Exception('Failed to fetch trip detail: ${res.statusCode}');
-      }
+      _checkResponse(res);
 
       return jsonDecode(res.body);
     });
@@ -232,7 +301,7 @@ class APIService {
   // ─── Receipts ─────────────────────────────────────────
 
   /// Uploads a receipt and returns both the receipt and (optionally) the updated trip.
-  Future<({Receipt receipt, Trip? trip})> uploadReceipt(File image, {required String tripId}) async {
+  Future<({Receipt receipt, Trip? trip})> uploadReceipt(File image, {required String tripId, String paymentMethod = 'personal'}) async {
     return _withRetry(() async {
       final uri = Uri.parse('$baseUrl/expense');
       debugPrint('POST $uri (file=${image.path})');
@@ -240,7 +309,8 @@ class APIService {
       final token = await AuthService.instance.getToken();
       final req = http.MultipartRequest('POST', uri)
         ..files.add(await http.MultipartFile.fromPath('file', image.path))
-        ..fields['trip_id'] = tripId;
+        ..fields['trip_id'] = tripId
+        ..fields['payment_method'] = paymentMethod;
 
       if (token != null) {
         req.headers['Authorization'] = 'Bearer $token';
@@ -267,6 +337,24 @@ class APIService {
     });
   }
 
+  Future<Receipt> updatePaymentMethod(String receiptId, String paymentMethod) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/receipts/$receiptId/payment-method');
+      final token = await AuthService.instance.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final res = await http.patch(uri, headers: headers, body: jsonEncode({
+        'payment_method': paymentMethod,
+      })).timeout(_timeout);
+      if (res.statusCode != 200) {
+        throw Exception('Update payment method failed: ${res.statusCode}');
+      }
+      return Receipt.fromMap(jsonDecode(res.body));
+    });
+  }
+
   Future<Map<String, dynamic>> confirmCategory(String receiptId, String travelCategory) async {
     return _withRetry(() async {
       final uri = Uri.parse('$baseUrl/receipts/$receiptId/confirm');
@@ -288,19 +376,17 @@ class APIService {
     });
   }
 
-  Future<List<Receipt>> fetchReceipts({String? tripId}) async {
+  Future<List<Receipt>> fetchReceipts({String? tripId, String? userId}) async {
     return _withRetry(() async {
-      var url = '$baseUrl/receipts';
-      if (tripId != null) url += '?trip_id=$tripId';
-      final uri = Uri.parse(url);
+      final params = <String, String>{};
+      if (tripId != null) params['trip_id'] = tripId;
+      if (userId != null) params['user_id'] = userId;
+      final uri = Uri.parse('$baseUrl/receipts').replace(queryParameters: params.isEmpty ? null : params);
       final headers = await _authHeaders();
 
       final res = await http.get(uri, headers: headers).timeout(_timeout);
       debugPrint('GET /receipts ${res.statusCode}');
-
-      if (res.statusCode != 200) {
-        throw Exception('Failed to fetch receipts: ${res.statusCode}');
-      }
+      _checkResponse(res);
 
       final List<dynamic> data = jsonDecode(res.body);
       return data.map((item) => Receipt.fromMap(Map<String, dynamic>.from(item))).toList();
@@ -389,6 +475,47 @@ class APIService {
     });
   }
 
+  // ─── Departments ────────────────────────────────────────
+
+  static List<String>? _cachedDepartments;
+
+  Future<List<String>> fetchDepartmentOptions() async {
+    if (_cachedDepartments != null) return _cachedDepartments!;
+
+    final uri = Uri.parse('$baseUrl/departments');
+    final res = await http.get(uri).timeout(_timeout);
+
+    if (res.statusCode != 200) {
+      throw Exception('Failed to fetch departments');
+    }
+
+    final List<dynamic> data = jsonDecode(res.body);
+    _cachedDepartments = data.cast<String>();
+    return _cachedDepartments!;
+  }
+
+  // ─── Report Summary (Gemini via backend) ───────────────
+
+  Future<String> generateReportSummary(String prompt) async {
+    final token = await AuthService.instance.getToken();
+    final uri = Uri.parse('$baseUrl/report/summary');
+    final res = await http.post(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({'prompt': prompt}),
+    ).timeout(const Duration(seconds: 30));
+
+    if (res.statusCode != 200) {
+      throw Exception('Report summary failed: ${res.statusCode}');
+    }
+
+    final data = jsonDecode(res.body);
+    return data['summary'] as String;
+  }
+
   // ─── Health ───────────────────────────────────────────
 
   Future<bool> isServerAlive() async {
@@ -401,4 +528,34 @@ class APIService {
       return false;
     }
   }
+
+  // ─── Profile Image ─────────────────────────────────────
+
+  Future<String?> uploadProfileImage(File image) async {
+    final uri = Uri.parse('$baseUrl/profile/image');
+    final token = await AuthService.instance.getToken();
+    final req = http.MultipartRequest('POST', uri)
+      ..files.add(await http.MultipartFile.fromPath('file', image.path));
+    if (token != null) {
+      req.headers['Authorization'] = 'Bearer $token';
+    }
+    final streamed = await req.send().timeout(_timeout);
+    final res = await http.Response.fromStream(streamed);
+    if (res.statusCode != 200) {
+      throw Exception('Profile image upload failed: ${res.statusCode}');
+    }
+    final data = jsonDecode(res.body);
+    return data['profile_image'] as String?;
+  }
+
+  Future<void> deleteProfileImage() async {
+    final uri = Uri.parse('$baseUrl/profile/image');
+    final headers = await _authHeaders();
+    final res = await http.delete(uri, headers: headers).timeout(_timeout);
+    if (res.statusCode != 200) {
+      throw Exception('Profile image delete failed: ${res.statusCode}');
+    }
+  }
+
+  String profileImageUrl() => '$baseUrl/profile/image';
 }

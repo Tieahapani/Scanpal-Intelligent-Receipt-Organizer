@@ -4,6 +4,7 @@ class AppUser {
   final String name;
   final String? department;
   final String role; // "traveler" or "admin"
+  final String? profileImage;
 
   const AppUser({
     required this.id,
@@ -11,6 +12,7 @@ class AppUser {
     required this.name,
     this.department,
     required this.role,
+    this.profileImage,
   });
 
   bool get isAdmin => role == "admin";
@@ -23,6 +25,7 @@ class AppUser {
       name: m['name']?.toString() ?? '',
       department: m['department']?.toString(),
       role: m['role']?.toString() ?? 'traveler',
+      profileImage: m['profile_image']?.toString(),
     );
   }
 
@@ -32,5 +35,6 @@ class AppUser {
         'name': name,
         'department': department,
         'role': role,
+        'profile_image': profileImage,
       };
 }

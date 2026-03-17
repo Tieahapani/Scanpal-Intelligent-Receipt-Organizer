@@ -2,8 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'services/monthly_summary_service.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'api.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -74,11 +73,6 @@ class _ExpenseReportPageState extends State<ExpenseReportPage> {
   }
 
   Future<String> _callGeminiAPI() async {
-    // TODO: Replace with your Gemini API key
-    const apiKey = 'AIzaSyCAnr5KqnEg-YIMTq5_OAubnoLRGxAB9mg';
-    const apiUrl =
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-
     final dateFormatter = DateFormat('MMM d, y');
     final startDate = dateFormatter.format(widget.dateRange.start);
     final endDate = dateFormatter.format(widget.dateRange.end);
@@ -86,13 +80,11 @@ class _ExpenseReportPageState extends State<ExpenseReportPage> {
     final dailyAverage =
         widget.currency.format(widget.stats.dailyAverage ?? 0);
 
-    // Build category breakdown text — ALL categories
     final categoryText = widget.categoryBreakdown
         .map((cat) =>
             '${cat.categoryName}: ${widget.currency.format(cat.total)} (${cat.percentage.toStringAsFixed(1)}%)')
         .join('\n');
 
-    // Build vendor breakdown text — ALL vendors
     final vendorText = widget.vendorBreakdown
         .map((vendor) =>
             '${vendor.vendorName}: ${widget.currency.format(vendor.total)} (${vendor.percentage.toStringAsFixed(1)}%)')
@@ -136,33 +128,7 @@ Guidelines:
 - Focus on insights, not just restating numbers
 ''';
 
-    final response = await http.post(
-      Uri.parse('$apiUrl?key=$apiKey'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'contents': [
-          {
-            'parts': [
-              {'text': prompt}
-            ]
-          }
-        ],
-        'generationConfig': {
-          'temperature': 0.4,
-          'maxOutputTokens': 500,
-        }
-      }),
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      final text =
-          data['candidates'][0]['content']['parts'][0]['text'] as String;
-      return text.trim();
-    } else {
-      throw Exception(
-          'API returned ${response.statusCode}: ${response.body}');
-    }
+    return APIService().generateReportSummary(prompt);
   }
 
   Future<List<int>> _generatePDF(String aiSummary) async {

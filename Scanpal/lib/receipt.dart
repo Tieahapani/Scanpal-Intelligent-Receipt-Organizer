@@ -1,5 +1,14 @@
 // lib/receipt.dart
 
+String? _titleCase(String? s) {
+  if (s == null || s.isEmpty) return s;
+  return s
+      .split(' ')
+      .where((w) => w.isNotEmpty)
+      .map((w) => '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+      .join(' ');
+}
+
 class LineItem {
   final String name;
   final double? quantity;   // nullable
@@ -81,6 +90,7 @@ class Receipt {
   final String? tripId;
   final String? travelCategory;
   final String? imageUrl;
+  final String paymentMethod; // "personal" or "corporate"
 
   const Receipt({
     required this.id,
@@ -100,6 +110,7 @@ class Receipt {
     this.tripId,
     this.travelCategory,
     this.imageUrl,
+    this.paymentMethod = 'personal',
   });
 
   factory Receipt.fromMap(Map<String, dynamic> m) {
@@ -138,7 +149,7 @@ class Receipt {
 
     return Receipt(
       id:  (m['receipt_id'] ?? m['id'] ?? DateTime.now().millisecondsSinceEpoch.toString()).toString(),
-      merchant: m['merchant']?.toString(),
+      merchant: _titleCase(m['merchant']?.toString()),
       date: parsedDate,
       address: m['address']?.toString(),
       subtotal: _numOrNull(m['subtotal']),
@@ -154,6 +165,7 @@ class Receipt {
       tripId: m['trip_id']?.toString(),
       travelCategory: (m['travel_category'] ?? m['category'])?.toString(),
       imageUrl: m['image_url']?.toString(),
+      paymentMethod: (m['payment_method'] ?? 'personal').toString(),
     );
   }
 
@@ -221,7 +233,8 @@ class Receipt {
         if (provider != null) 'provider': provider,
         if (confidences != null) 'confidences': confidences,
         if (category != null) 'category': category,
-        if (currency != null) 'currency': currency,  // ✅ NEW
+        if (currency != null) 'currency': currency,
+        'payment_method': paymentMethod,
       };
 
   /// Add this so the UI can easily update merchant (and other fields if needed)
@@ -238,7 +251,8 @@ class Receipt {
     String? provider,
     Map<String, double>? confidences,
     String? category,
-    String? currency,  // ✅ NEW
+    String? currency,
+    String? paymentMethod,
   }) {
     return Receipt(
       id: id ?? this.id,
@@ -253,7 +267,8 @@ class Receipt {
       provider: provider ?? this.provider,
       confidences: confidences ?? this.confidences,
       category: category ?? this.category,
-      currency: currency ?? this.currency,  // ✅ NEW
+      currency: currency ?? this.currency,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
     );
   }
 }

@@ -13,10 +13,17 @@ class Trip {
   final double flightCost;
   final double groundTransportation;
   final double registrationCost;
+  final double meals;
   final double otherAsCost;
   final double totalExpenses;
   final double advance;
   final double claim;
+  final String? coverImageUrl;
+  final double budget;
+  final String? travelType;
+  final String? category;
+  final String? description;
+  final String? travelers;
 
   const Trip({
     required this.id,
@@ -33,10 +40,17 @@ class Trip {
     this.flightCost = 0.0,
     this.groundTransportation = 0.0,
     this.registrationCost = 0.0,
+    this.meals = 0.0,
     this.otherAsCost = 0.0,
     this.totalExpenses = 0.0,
     this.advance = 0.0,
     this.claim = 0.0,
+    this.coverImageUrl,
+    this.budget = 0.0,
+    this.travelType,
+    this.category,
+    this.description,
+    this.travelers,
   });
 
   bool get isActive {
@@ -91,10 +105,17 @@ class Trip {
       flightCost: _toDouble(m['flight_cost']),
       groundTransportation: _toDouble(m['ground_transportation']),
       registrationCost: _toDouble(m['registration_cost']),
+      meals: _toDouble(m['meals']),
       otherAsCost: _toDouble(m['other_as_cost']),
       totalExpenses: _toDouble(m['total_expenses']),
       advance: _toDouble(m['advance']),
       claim: _toDouble(m['claim']),
+      coverImageUrl: m['cover_image_url']?.toString(),
+      budget: _toDouble(m['budget']),
+      travelType: m['travel_type']?.toString(),
+      category: m['category']?.toString(),
+      description: m['description']?.toString(),
+      travelers: m['travelers']?.toString(),
     );
   }
 
@@ -124,9 +145,16 @@ class Trip {
         'flight_cost': flightCost,
         'ground_transportation': groundTransportation,
         'registration_cost': registrationCost,
+        'meals': meals,
         'other_as_cost': otherAsCost,
         'total_expenses': totalExpenses,
         'advance': advance,
         'claim': claim,
+        'cover_image_url': coverImageUrl,
+        'budget': budget,
+        'travel_type': travelType,
+        'category': category,
+        'description': description,
+        'travelers': travelers,
       };
 }

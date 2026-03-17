@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'models/user.dart';
 import 'models/trip.dart';
+import 'receipt.dart';
 import 'api.dart';
 import 'auth_service.dart';
 import 'login_page.dart';
 import 'trip_detail_page.dart';
+import 'admin_analytics_page.dart';
+import 'admin_receipts_page.dart';
 
 class AdminHomePage extends StatefulWidget {
   final AppUser user;
@@ -23,11 +26,27 @@ class _AdminHomePageState extends State<AdminHomePage> {
   bool _loading = true;
   Timer? _refreshTimer;
 
+  // Tab state
+  int _tabIndex = 0;
+
+  // Department filter
+  String? _selectedDepartment;
+
+  // Receipts data (loaded lazily)
+  List<Receipt> _receipts = [];
+  bool _receiptsLoading = false;
+  bool _receiptsLoaded = false;
+
+  // Analytics data (loaded lazily)
+  Map<String, dynamic>? _orgAnalytics;
+  List<Map<String, dynamic>> _departmentStats = [];
+  bool _analyticsLoading = false;
+  bool _analyticsLoaded = false;
+
   @override
   void initState() {
     super.initState();
     _loadData();
-    // Auto-refresh every 30 seconds so new trips appear without manual action
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _loadData(silent: true);
     });
@@ -37,6 +56,21 @@ class _AdminHomePageState extends State<AdminHomePage> {
   void dispose() {
     _refreshTimer?.cancel();
     super.dispose();
+  }
+
+  List<String> get _departments {
+    final depts = _trips
+        .where((t) => t.department != null && t.department!.isNotEmpty)
+        .map((t) => t.department!)
+        .toSet()
+        .toList()
+      ..sort();
+    return depts;
+  }
+
+  List<Trip> get _filteredTrips {
+    if (_selectedDepartment == null) return _trips;
+    return _trips.where((t) => t.department == _selectedDepartment).toList();
   }
 
   Future<void> _loadData({bool silent = false}) async {
@@ -51,6 +85,56 @@ class _AdminHomePageState extends State<AdminHomePage> {
     } finally {
       if (mounted && !silent) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _loadReceipts() async {
+    if (_receiptsLoaded) return;
+    setState(() => _receiptsLoading = true);
+    try {
+      final receipts = await _api.fetchReceipts();
+      if (mounted) {
+        setState(() {
+          _receipts = receipts;
+          _receiptsLoaded = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load receipts: $e');
+    } finally {
+      if (mounted) setState(() => _receiptsLoading = false);
+    }
+  }
+
+  Future<void> _refreshReceipts() async {
+    _receiptsLoaded = false;
+    await _loadReceipts();
+  }
+
+  Future<void> _loadAnalytics() async {
+    if (_analyticsLoaded) return;
+    setState(() => _analyticsLoading = true);
+    try {
+      final results = await Future.wait([
+        _api.fetchOrgAnalytics(),
+        _api.fetchDepartments(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _orgAnalytics = results[0] as Map<String, dynamic>;
+          _departmentStats = results[1] as List<Map<String, dynamic>>;
+          _analyticsLoaded = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load analytics: $e');
+    } finally {
+      if (mounted) setState(() => _analyticsLoading = false);
+    }
+  }
+
+  Future<void> _refreshAnalytics() async {
+    _analyticsLoaded = false;
+    await _loadAnalytics();
   }
 
   Future<void> _logout() async {
@@ -70,9 +154,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
-        title: const Text(
-          'ScanPal Admin',
-          style: TextStyle(
+        title: Text(
+          ['ScanPal Admin', 'Receipts', 'Analytics'][_tabIndex],
+          style: const TextStyle(
             color: Color(0xFF1565C0),
             fontSize: 22,
             fontWeight: FontWeight.w700,
@@ -85,16 +169,115 @@ class _AdminHomePageState extends State<AdminHomePage> {
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _buildTripsView(),
+      body: _buildTabBody(),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _tabIndex,
+        onTap: (i) {
+          setState(() => _tabIndex = i);
+          if (i == 1) _loadReceipts();
+          if (i == 2) _loadAnalytics();
+        },
+        selectedItemColor: const Color(0xFF1565C0),
+        unselectedItemColor: const Color(0xFF94A3B8),
+        backgroundColor: Colors.white,
+        elevation: 8,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.flight), label: 'Trips'),
+          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Receipts'),
+          BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded), label: 'Analytics'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabBody() {
+    switch (_tabIndex) {
+      case 1:
+        return AdminReceiptsPage(
+          receipts: _receipts,
+          trips: _trips,
+          isLoading: _receiptsLoading,
+          onRefresh: _refreshReceipts,
+        );
+      case 2:
+        return AdminAnalyticsPage(
+          orgAnalytics: _orgAnalytics,
+          departments: _departmentStats,
+          isLoading: _analyticsLoading,
+          onRefresh: _refreshAnalytics,
+          onDepartmentTap: (dept) {
+            setState(() {
+              _selectedDepartment = dept;
+              _tabIndex = 0;
+            });
+          },
+        );
+      default:
+        return _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _buildTripsView();
+    }
+  }
+
+  Widget _buildDepartmentFilter() {
+    final depts = _departments;
+    if (depts.isEmpty) return const SizedBox.shrink();
+
+    return SizedBox(
+      height: 42,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              label: const Text('All'),
+              selected: _selectedDepartment == null,
+              onSelected: (_) => setState(() => _selectedDepartment = null),
+              selectedColor: const Color(0xFF1565C0),
+              backgroundColor: const Color(0xFF0891B2).withValues(alpha: 0.1),
+              side: BorderSide(
+                color: _selectedDepartment == null
+                    ? Colors.transparent
+                    : const Color(0xFF0891B2).withValues(alpha: 0.3),
+              ),
+              labelStyle: TextStyle(
+                color: _selectedDepartment == null ? Colors.white : const Color(0xFF0891B2),
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          ...depts.map((dept) => Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              label: Text(dept),
+              selected: _selectedDepartment == dept,
+              onSelected: (_) => setState(() => _selectedDepartment = dept),
+              selectedColor: const Color(0xFF1565C0),
+              backgroundColor: const Color(0xFF0891B2).withValues(alpha: 0.1),
+              side: BorderSide(
+                color: _selectedDepartment == dept
+                    ? Colors.transparent
+                    : const Color(0xFF0891B2).withValues(alpha: 0.3),
+              ),
+              labelStyle: TextStyle(
+                color: _selectedDepartment == dept ? Colors.white : const Color(0xFF0891B2),
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          )),
+        ],
+      ),
     );
   }
 
   Widget _buildTripsView() {
-    final active = _trips.where((t) => t.isActive).toList();
-    final upcoming = _trips.where((t) => t.isUpcoming).toList();
-    final unscheduled = _trips.where((t) => t.isUnscheduled).toList();
+    final filtered = _filteredTrips;
+    final active = filtered.where((t) => t.isActive).toList();
+    final upcoming = filtered.where((t) => t.isUpcoming).toList();
+    final unscheduled = filtered.where((t) => t.isUnscheduled).toList();
 
     return RefreshIndicator(
       onRefresh: () => _loadData(silent: true),
@@ -119,13 +302,18 @@ class _AdminHomePageState extends State<AdminHomePage> {
           ),
           const SizedBox(height: 8),
           Text(
-            '${_trips.length} total trips across all travelers',
+            _selectedDepartment != null
+                ? '$_selectedDepartment: ${filtered.length} trips (${_trips.length} total)'
+                : '${_trips.length} total trips across all travelers',
             style: const TextStyle(
               fontSize: 13,
               color: Color(0xFF94A3B8),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+
+          _buildDepartmentFilter(),
+          if (_departments.isNotEmpty) const SizedBox(height: 16),
 
           if (active.isNotEmpty) ...[
             _sectionHeader('Active Trips', active.length),
@@ -143,6 +331,22 @@ class _AdminHomePageState extends State<AdminHomePage> {
             _sectionHeader('Unscheduled Trips', unscheduled.length),
             ...unscheduled.map((t) => _tripCard(t)),
           ],
+
+          if (filtered.isEmpty && _trips.isNotEmpty)
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 80),
+                  Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No trips in ${_selectedDepartment ?? "this department"}',
+                    style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
 
           if (_trips.isEmpty)
             Center(
