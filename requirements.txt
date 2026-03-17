@@ -10,3 +10,10 @@ pillow==11.3.0
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
 PyJWT==2.8.0
+bcrypt==4.2.0
+pdfplumber 
+langchain 
+langchain-google-genai 
+langchain-community 
+faiss-cpu 
+google-generativeai

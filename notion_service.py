@@ -25,6 +25,7 @@ class NotionService:
         "Flight Cost": "Flight Cost",
         "Ground Transportation": "Ground Transportation Costs",
         "Registration Cost": "Registration Cost",
+        "Meals": "Meals",
         "Other AS Cost": "Other AS Cost",
     }
 
@@ -255,6 +256,7 @@ class NotionService:
             "flight_cost": 0.0,
             "ground_transportation": 0.0,
             "registration_cost": 0.0,
+            "meals": 0.0,
             "other_as_cost": 0.0,
             "total_expenses": 0.0,
             "advance": 0.0,
@@ -303,6 +305,8 @@ class NotionService:
                 result["ground_transportation"] = get_number(prop)
             elif name_stripped == "Registration Cost":
                 result["registration_cost"] = get_number(prop)
+            elif name_stripped == "Meals":
+                result["meals"] = get_number(prop)
             elif name_stripped == "Other AS Cost":
                 result["other_as_cost"] = get_number(prop)
             elif name_stripped == "Total Expense":
@@ -369,6 +373,19 @@ class NotionService:
         }
 
         return self._request("POST", url, json=body)
+
+    # ─── Department Options ─────────────────────────────────
+
+    def get_department_options(self):
+        """Fetch the Department select options from the database schema."""
+        url = f"{self.BASE_URL}/databases/{self.database_id}"
+        data = self._request("GET", url)
+        props = data.get("properties", {})
+        for name, prop in props.items():
+            if name.strip() == "Department" and prop.get("type") == "select":
+                options = prop.get("select", {}).get("options", [])
+                return [opt["name"] for opt in options]
+        return []
 
     # ─── Sync ───────────────────────────────────────────────
 
