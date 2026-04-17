@@ -15,7 +15,7 @@ def _headers():
     }
 
 
-def upload_file(filename: str, data: bytes, content_type: str = "image/jpeg") -> str:
+def upload_file(filename: str, data: bytes, content_type: str = "application/octet-stream") -> str:
     """Upload a file to Supabase Storage. Returns the public URL."""
     url = f"{SUPABASE_URL}/storage/v1/object/{BUCKET}/{filename}"
     headers = _headers()

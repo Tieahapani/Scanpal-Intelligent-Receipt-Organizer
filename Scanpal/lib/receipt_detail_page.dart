@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'receipt.dart';
 import 'api.dart';
 import 'auth_service.dart';
@@ -49,11 +50,11 @@ class ReceiptDetailPage extends StatelessWidget {
                   minScale: 0.5,
                   maxScale: 4,
                   child: Center(
-                    child: Image.network(
+                    child: CachedNetworkImage(imageUrl:
                       url,
-                      headers: {'Authorization': 'Bearer ${snap.data}'},
+                      httpHeaders: {'Authorization': 'Bearer ${snap.data}'},
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => _buildNoImagePlaceholder(),
+                      errorWidget: (_, __, ___) => _buildNoImagePlaceholder(),
                     ),
                   ),
                 );

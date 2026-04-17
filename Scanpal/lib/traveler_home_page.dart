@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'models/user.dart';
 import 'models/trip.dart';
 import 'receipt.dart';
@@ -153,11 +154,11 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
               height: size,
               decoration: const BoxDecoration(shape: BoxShape.circle),
               clipBehavior: Clip.antiAlias,
-              child: Image.network(
-                '${_api.profileImageUrl()}?v=$_avatarVersion',
-                headers: {'Authorization': 'Bearer ${tokenSnap.data}'},
+              child: CachedNetworkImage(
+                imageUrl: '${_api.profileImageUrl()}?v=$_avatarVersion',
+                httpHeaders: {'Authorization': 'Bearer ${tokenSnap.data}'},
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _initialsAvatar(size),
+                errorWidget: (_, __, ___) => _initialsAvatar(size),
               ),
             );
           },
@@ -2154,11 +2155,11 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
               borderRadius: BorderRadius.circular(12),
             ),
             clipBehavior: Clip.antiAlias,
-            child: Image.network(
-              url,
-              headers: {'Authorization': 'Bearer ${snap.data}'},
+            child: CachedNetworkImage(
+              imageUrl: url,
+              httpHeaders: {'Authorization': 'Bearer ${snap.data}'},
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _receiptPlaceholder(size),
+              errorWidget: (_, __, ___) => _receiptPlaceholder(size),
             ),
           );
         },

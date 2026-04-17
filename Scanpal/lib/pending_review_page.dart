@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'api.dart';
 import 'models/trip.dart';
 import 'receipt.dart';
@@ -305,7 +306,7 @@ class _PendingReviewPageState extends State<PendingReviewPage> {
                           if (!snap.hasData) return Container(height: 200, decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(16)), alignment: Alignment.center, child: const CircularProgressIndicator(color: _purple));
                           return ClipRRect(
                             borderRadius: BorderRadius.circular(16),
-                            child: Image.network(_api.receiptImageUrl(receipt.id), headers: {'Authorization': 'Bearer ${snap.data}'}, height: 220, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(height: 200, decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(16)), alignment: Alignment.center, child: Icon(Icons.image_not_supported_outlined, size: 40, color: Colors.grey.shade400))),
+                            child: CachedNetworkImage(imageUrl: _api.receiptImageUrl(receipt.id), httpHeaders: {'Authorization': 'Bearer ${snap.data}'}, height: 220, width: double.infinity, fit: BoxFit.cover, errorWidget: (_, __, ___) => Container(height: 200, decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(16)), alignment: Alignment.center, child: Icon(Icons.image_not_supported_outlined, size: 40, color: Colors.grey.shade400))),
                           );
                         },
                       ),
@@ -404,11 +405,11 @@ class _PendingReviewPageState extends State<PendingReviewPage> {
       ),
       clipBehavior: Clip.antiAlias,
       child: (travelerEmail != null && _token != null)
-          ? Image.network(
-              _api.travelerImageUrl(travelerEmail),
-              headers: {'Authorization': 'Bearer $_token'},
+          ? CachedNetworkImage(
+              imageUrl: _api.travelerImageUrl(travelerEmail),
+              httpHeaders: {'Authorization': 'Bearer $_token'},
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Center(
+              errorWidget: (_, __, ___) => Center(
                 child: Text(
                   _initials(travelerName),
                   style: TextStyle(

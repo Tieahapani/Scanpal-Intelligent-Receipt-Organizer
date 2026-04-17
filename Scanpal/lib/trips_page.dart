@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'models/trip.dart';
 import 'trip_detail_page.dart';
@@ -973,10 +974,10 @@ class _TripsPageState extends State<TripsPage> {
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: trip.coverImageUrl != null
-                    ? Image.network(
+                    ? CachedNetworkImage(imageUrl:
                         trip.coverImageUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _thumbFallback(colors, initial),
+                        errorWidget: (_, __, ___) => _thumbFallback(colors, initial),
                       )
                     : _thumbFallback(colors, initial),
               ),

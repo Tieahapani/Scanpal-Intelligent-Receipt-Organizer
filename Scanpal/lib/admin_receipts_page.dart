@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'receipt.dart';
 import 'models/trip.dart';
 import 'api.dart';
@@ -1071,11 +1072,11 @@ class _AdminReceiptsPageState extends State<AdminReceiptsPage> {
             child: SizedBox(
               width: size,
               height: size,
-              child: Image.network(
-                url,
-                headers: {'Authorization': 'Bearer ${snap.data}'},
+              child: CachedNetworkImage(
+                imageUrl: url,
+                httpHeaders: {'Authorization': 'Bearer ${snap.data}'},
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _thumbnailPlaceholder(size),
+                errorWidget: (_, __, ___) => _thumbnailPlaceholder(size),
               ),
             ),
           );
@@ -1246,12 +1247,12 @@ class _AdminReceiptsPageState extends State<AdminReceiptsPage> {
                           return const Center(child: CircularProgressIndicator());
                         }
                         final url = APIService().receiptImageUrl(receipt.id);
-                        return Image.network(
-                          url,
-                          headers: {'Authorization': 'Bearer ${snap.data}'},
+                        return CachedNetworkImage(
+                          imageUrl: url,
+                          httpHeaders: {'Authorization': 'Bearer ${snap.data}'},
                           fit: BoxFit.cover,
                           width: double.infinity,
-                          errorBuilder: (_, __, ___) => Center(
+                          errorWidget: (_, __, ___) => Center(
                             child: Icon(Icons.receipt_long, size: 48, color: Colors.grey.shade300),
                         ),
                       );

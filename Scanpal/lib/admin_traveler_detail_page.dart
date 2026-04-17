@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'models/trip.dart';
 import 'receipt.dart';
 import 'api.dart';
@@ -1019,10 +1020,10 @@ class _AdminTravelerDetailPageState extends State<AdminTravelerDetailPage> {
         borderRadius: BorderRadius.circular(10),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Image.network(
-        trip.coverImageUrl!,
+      child: CachedNetworkImage(
+        imageUrl: trip.coverImageUrl!,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback,
+        errorWidget: (_, __, ___) => fallback,
       ),
     );
   }
@@ -1042,13 +1043,13 @@ class _AdminTravelerDetailPageState extends State<AdminTravelerDetailPage> {
           child: (receipt.imageUrl != null &&
                   receipt.imageUrl!.isNotEmpty &&
                   tokenSnap.hasData)
-              ? Image.network(
-                  _api.receiptImageUrl(receipt.id),
-                  headers: {
+              ? CachedNetworkImage(
+                  imageUrl: _api.receiptImageUrl(receipt.id),
+                  httpHeaders: {
                     'Authorization': 'Bearer ${tokenSnap.data}'
                   },
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Center(
+                  errorWidget: (_, __, ___) => Center(
                     child: Icon(_categoryIcon(category),
                         size: 18, color: const Color(0xFF46166B)),
                   ),
@@ -1089,11 +1090,11 @@ class _AdminTravelerDetailPageState extends State<AdminTravelerDetailPage> {
           height: size,
           decoration: const BoxDecoration(shape: BoxShape.circle),
           clipBehavior: Clip.antiAlias,
-          child: Image.network(
-            _api.travelerImageUrl(email),
-            headers: {'Authorization': 'Bearer ${tokenSnap.data}'},
+          child: CachedNetworkImage(
+            imageUrl: _api.travelerImageUrl(email),
+            httpHeaders: {'Authorization': 'Bearer ${tokenSnap.data}'},
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _initials(name, size),
+            errorWidget: (_, __, ___) => _initials(name, size),
           ),
         );
       },

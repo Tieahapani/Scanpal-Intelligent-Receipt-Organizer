@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'models/trip.dart';
 import 'receipt.dart';
 import 'api.dart';
@@ -570,11 +571,11 @@ class _AdminTravelersPageState extends State<AdminTravelersPage> {
           height: size,
           decoration: const BoxDecoration(shape: BoxShape.circle),
           clipBehavior: Clip.antiAlias,
-          child: Image.network(
-            api.travelerImageUrl(email),
-            headers: {'Authorization': 'Bearer ${tokenSnap.data}'},
+          child: CachedNetworkImage(
+            imageUrl: api.travelerImageUrl(email),
+            httpHeaders: {'Authorization': 'Bearer ${tokenSnap.data}'},
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _initialsAvatar(name, size),
+            errorWidget: (_, __, ___) => _initialsAvatar(name, size),
           ),
         );
       },

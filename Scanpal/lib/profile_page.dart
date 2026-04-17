@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'api.dart';
 import 'auth_service.dart';
 import 'models/user.dart';
@@ -212,7 +213,7 @@ class _ProfilePageState extends State<ProfilePage> {
           return CircleAvatar(
             radius: radius,
             backgroundColor: const Color(0xFFE8A824),
-            backgroundImage: NetworkImage(
+            backgroundImage: CachedNetworkImageProvider(
               '${_api.profileImageUrl()}?v=$_imageVersion',
               headers: {'Authorization': 'Bearer ${snap.data}'},
             ),

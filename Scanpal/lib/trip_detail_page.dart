@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'models/trip.dart';
 import 'receipt.dart';
 import 'api.dart';
@@ -459,10 +460,10 @@ class _TripDetailPageState extends State<TripDetailPage> {
           children: [
             // Background image or gradient fallback
             if (_trip.coverImageUrl != null)
-              Image.network(
-                _trip.coverImageUrl!,
+              CachedNetworkImage(
+                imageUrl: _trip.coverImageUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorWidget: (_, __, ___) => Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
@@ -1810,11 +1811,11 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
               ),
               clipBehavior: Clip.hardEdge,
               child: receipt.imageUrl != null && receipt.imageUrl!.isNotEmpty && _token != null
-                  ? Image.network(
-                      _api.receiptImageUrl(receipt.id),
-                      headers: {'Authorization': 'Bearer $_token'},
+                  ? CachedNetworkImage(
+                      imageUrl: _api.receiptImageUrl(receipt.id),
+                      httpHeaders: {'Authorization': 'Bearer $_token'},
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Center(
+                      errorWidget: (_, __, ___) => Center(
                         child: Icon(Icons.receipt_outlined, size: 26, color: Colors.grey.shade400),
                       ),
                     )

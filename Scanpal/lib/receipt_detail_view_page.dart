@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'receipt.dart';
 import 'models/trip.dart';
@@ -659,12 +660,12 @@ class _ReceiptDetailViewPageState extends State<ReceiptDetailViewPage> {
           );
         }
         final url = APIService().receiptImageUrl(receipt.id);
-        return Image.network(
+        return CachedNetworkImage(imageUrl:
           url,
-          headers: {'Authorization': 'Bearer ${snap.data}'},
+          httpHeaders: {'Authorization': 'Bearer ${snap.data}'},
           fit: BoxFit.cover,
           width: double.infinity,
-          errorBuilder: (_, __, ___) => Container(
+          errorWidget: (_, __, ___) => Container(
             color: Colors.grey.shade100,
             alignment: Alignment.center,
             child: Icon(Icons.receipt_long, size: 48, color: Colors.grey.shade300),
