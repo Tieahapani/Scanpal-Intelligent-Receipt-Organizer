@@ -5,3 +5,5 @@ __pycache__/
 *.pyc
 uploads/
 rag/faiss_index/
+Scanpal/backend/
+flutter/

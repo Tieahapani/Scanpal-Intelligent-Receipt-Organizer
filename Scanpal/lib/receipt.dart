@@ -91,6 +91,11 @@ class Receipt {
   final String? travelCategory;
   final String? imageUrl;
   final String paymentMethod; // "personal" or "corporate"
+  final String? addedBy; // "admin" or "traveler" (null treated as "traveler")
+  final String? mealType; // breakfast, lunch, dinner, incidentals, hospitality
+
+  bool get isAdminAdded => addedBy == 'admin';
+  bool get isPlaceholder => isAdminAdded && imageUrl == null;
 
   const Receipt({
     required this.id,
@@ -111,6 +116,8 @@ class Receipt {
     this.travelCategory,
     this.imageUrl,
     this.paymentMethod = 'personal',
+    this.addedBy,
+    this.mealType,
   });
 
   factory Receipt.fromMap(Map<String, dynamic> m) {
@@ -164,8 +171,12 @@ class Receipt {
       currency: m['currency']?.toString() ?? '\$',
       tripId: m['trip_id']?.toString(),
       travelCategory: (m['travel_category'] ?? m['category'])?.toString(),
-      imageUrl: m['image_url']?.toString(),
+      imageUrl: (m['image_url'] != null && m['image_url'].toString().isNotEmpty)
+          ? m['image_url'].toString()
+          : null,
       paymentMethod: (m['payment_method'] ?? 'personal').toString(),
+      addedBy: m['added_by']?.toString(),
+      mealType: m['meal_type']?.toString(),
     );
   }
 
@@ -235,6 +246,7 @@ class Receipt {
         if (category != null) 'category': category,
         if (currency != null) 'currency': currency,
         'payment_method': paymentMethod,
+        if (mealType != null) 'meal_type': mealType,
       };
 
   /// Add this so the UI can easily update merchant (and other fields if needed)
@@ -253,6 +265,8 @@ class Receipt {
     String? category,
     String? currency,
     String? paymentMethod,
+    String? addedBy,
+    String? mealType,
   }) {
     return Receipt(
       id: id ?? this.id,
@@ -269,6 +283,8 @@ class Receipt {
       category: category ?? this.category,
       currency: currency ?? this.currency,
       paymentMethod: paymentMethod ?? this.paymentMethod,
+      addedBy: addedBy ?? this.addedBy,
+      mealType: mealType ?? this.mealType,
     );
   }
 }

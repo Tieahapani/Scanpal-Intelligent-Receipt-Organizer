@@ -5,13 +5,22 @@ import 'trip_detail_page.dart';
 import 'add_trip_page.dart';
 import 'analytics_page.dart';
 import 'services/analytics_service.dart';
+import 'api.dart';
+import 'departments.dart';
 
 class TripsPage extends StatefulWidget {
   final List<Trip> trips;
   final VoidCallback? onRefresh;
   final AnalyticsService? analyticsService;
+  final bool showDepartmentFilter;
 
-  const TripsPage({super.key, required this.trips, this.onRefresh, this.analyticsService});
+  const TripsPage({
+    super.key,
+    required this.trips,
+    this.onRefresh,
+    this.analyticsService,
+    this.showDepartmentFilter = false,
+  });
 
   @override
   State<TripsPage> createState() => _TripsPageState();
@@ -23,6 +32,8 @@ class _TripsPageState extends State<TripsPage> {
   String _activeFilter = 'All';
   bool _showPicker = false;
   int _pickerYear = 2026;
+  String? _selectedDepartment;
+  List<Department> _departments = [];
 
   static const _months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -43,6 +54,14 @@ class _TripsPageState extends State<TripsPage> {
     _selectedMonth = now.month - 1;
     _selectedYear = now.year;
     _pickerYear = now.year;
+    _fetchDepartments();
+  }
+
+  Future<void> _fetchDepartments() async {
+    try {
+      final depts = await APIService().fetchDepartmentObjects();
+      if (mounted) setState(() => _departments = depts);
+    } catch (_) {}
   }
 
   String _tripStatus(Trip trip) {
@@ -50,6 +69,18 @@ class _TripsPageState extends State<TripsPage> {
     if (trip.isUpcoming) return 'upcoming';
     if (trip.isPast) return 'completed';
     return 'active';
+  }
+
+  List<String> get _availableDepartments {
+    if (_departments.isNotEmpty) return _departments.map((d) => d.name).toList();
+    // Fallback: derive from trips if API hasn't responded yet
+    return widget.trips
+        .map((t) => t.department)
+        .whereType<String>()
+        .where((d) => d.trim().isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
   }
 
   List<Trip> get _filteredTrips {
@@ -65,6 +96,9 @@ class _TripsPageState extends State<TripsPage> {
       if (_activeFilter != 'All') {
         final status = _tripStatus(t);
         if (status != _activeFilter.toLowerCase()) return false;
+      }
+      if (_selectedDepartment != null && t.department != _selectedDepartment) {
+        return false;
       }
       return true;
     }).toList();
@@ -119,7 +153,7 @@ class _TripsPageState extends State<TripsPage> {
                   padding: EdgeInsets.zero,
                   children: [
                     _buildMonthCard(filtered, currency, monthSpent),
-                    _buildStatusFilters(),
+                    _buildFilterButton(),
                     if (filtered.isEmpty)
                       _buildEmptyState()
                     else
@@ -219,26 +253,28 @@ class _TripsPageState extends State<TripsPage> {
                 ),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'My Trips',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1F2937),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'My Trips',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1F2937),
+                      ),
                     ),
-                  ),
-                  Text(
-                    '${widget.trips.length} total trips',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.grey.shade500,
+                    Text(
+                      '${widget.trips.length} total trips',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                        color: Colors.grey.shade500,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -524,39 +560,279 @@ class _TripsPageState extends State<TripsPage> {
     );
   }
 
-  // ─── Status Filters ─────────────────────────────────
+  // ─── Filter Button + Sheet ──────────────────────────
 
-  Widget _buildStatusFilters() {
+  int get _activeFilterCount {
+    int count = 0;
+    if (_activeFilter != 'All') count++;
+    if (_selectedDepartment != null) count++;
+    return count;
+  }
+
+  Widget _buildFilterButton() {
+    final count = _activeFilterCount;
+    final hasFilter = count > 0;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
-      child: Row(
-        children: _statusFilters.map((filter) {
-          final isActive = _activeFilter == filter;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: GestureDetector(
-              onTap: () => setState(() => _activeFilter = filter),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                decoration: BoxDecoration(
-                  color: isActive ? const Color(0xFF1F2937) : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isActive ? const Color(0xFF1F2937) : Colors.grey.shade200,
-                  ),
-                ),
-                child: Text(
-                  filter,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isActive ? Colors.white : Colors.grey.shade600,
-                  ),
+      child: GestureDetector(
+        onTap: _showFilterSheet,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: hasFilter ? const Color(0xFF46166B) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: hasFilter ? null : Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.filter_list,
+                size: 14,
+                color: hasFilter ? Colors.white : const Color(0xFF6B7280),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Filter',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: hasFilter ? Colors.white : const Color(0xFF6B7280),
                 ),
               ),
+              if (hasFilter) ...[
+                const SizedBox(width: 8),
+                Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.20),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$count',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _filterChip(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF46166B) : const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(20),
+          border: selected ? null : Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: selected ? Colors.white : const Color(0xFF6B7280),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFilterSheet() {
+    String tempDept = _selectedDepartment ?? 'All Departments';
+    String tempStatus = _activeFilter;
+    final allDepts = _availableDepartments;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          return Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.70,
+            ),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 4),
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE5E7EB),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 12, 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filter Trips',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      IconButton(
+                        icon: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close, size: 16, color: Color(0xFF9CA3AF)),
+                        ),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                ),
+                // Filter content
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Department section (only if showDepartmentFilter)
+                        if (widget.showDepartmentFilter) ...[
+                          const Text(
+                            'DEPARTMENT',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF9CA3AF),
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _filterChip('All', tempDept == 'All Departments', () => setSheetState(() => tempDept = 'All Departments')),
+                              ..._departments.map((dept) {
+                                final selected = tempDept == dept.name;
+                                return _filterChip(dept.name, selected, () => setSheetState(() => tempDept = dept.name));
+                              }),
+                              ...allDepts.where((d) => !_departments.any((dept) => dept.name == d)).map((d) {
+                                final selected = tempDept == d;
+                                return _filterChip(d, selected, () => setSheetState(() => tempDept = d));
+                              }),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                        // Trip Status section
+                        const Text(
+                          'TRIP STATUS',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF9CA3AF),
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _statusFilters.map((filter) {
+                            final selected = tempStatus == filter;
+                            return _filterChip(filter, selected, () => setSheetState(() => tempStatus = filter));
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 24),
+                        // Actions
+                        Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setSheetState(() {
+                                  tempDept = 'All Departments';
+                                  tempStatus = 'All';
+                                }),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: const Text(
+                                    'Reset',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF6B7280),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedDepartment = tempDept == 'All Departments' ? null : tempDept;
+                                    _activeFilter = tempStatus;
+                                  });
+                                  Navigator.pop(ctx);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF46166B),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: const Text(
+                                    'Apply Filters',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           );
-        }).toList(),
+        },
       ),
     );
   }

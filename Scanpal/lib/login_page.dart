@@ -5,6 +5,7 @@ import 'traveler_home_page.dart';
 import 'admin_home_page.dart';
 import 'register_page.dart';
 import 'otp_verify_page.dart';
+import 'forgot_password_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -527,7 +528,14 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                       Center(
                         child: TextButton(
                           onPressed: () {
-                            // TODO: implement forgot password
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ForgotPasswordPage(
+                                  initialEmail: _emailCtrl.text.trim(),
+                                ),
+                              ),
+                            );
                           },
                           child: const Text(
                             'Forgot your password?',

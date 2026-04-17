@@ -12,13 +12,14 @@ import 'services/analytics_service.dart';
 import 'auth_service.dart';
 import 'login_page.dart';
 import 'trip_detail_page.dart';
-import 'analytics_page.dart';
+// import 'analytics_page.dart'; // kept — analytics page still exists, just hidden from nav
 import 'receipts_page.dart';
 import 'receipt_detail_view_page.dart';
 import 'alerts_page.dart';
 import 'trips_page.dart';
 import 'add_trip_page.dart';
 import 'profile_page.dart';
+import 'settings_page.dart';
 
 class TravelerHomePage extends StatefulWidget {
   final AppUser user;
@@ -35,7 +36,6 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
   List<Receipt> _receipts = [];
   AnalyticsService? _analyticsService;
   bool _loading = true;
-  int _tabIndex = 0;
   bool _dropdownOpen = false;
   bool _showScanMenu = false;
   String _paymentMethod = 'personal';
@@ -51,13 +51,26 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
   String _uploadPaymentLabel = '';
   Timer? _progressTimer;
 
+  // Cached backend alerts
+  List<Map<String, dynamic>> _cachedAlerts = [];
+  int get _backendAlertCount => _cachedAlerts.where((a) => a['status'] == 'inbox').length;
+
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadAlerts();
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _loadData(silent: true);
+      _loadAlerts();
     });
+  }
+
+  Future<void> _loadAlerts() async {
+    try {
+      final alerts = await _api.fetchAlerts();
+      if (mounted) setState(() => _cachedAlerts = alerts);
+    } catch (_) {}
   }
 
   @override
@@ -213,30 +226,7 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
     return DateFormat('MMMM yyyy').format(DateTime.now());
   }
 
-  int get _alertCount {
-    int count = 0;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    for (final t in _trips) {
-      final tripReceipts = _receipts.where((r) => r.tripId == t.id).toList();
-
-      // Pre-travel: 10 days before departure, no receipts
-      if (t.departureDate != null) {
-        final depDay = DateTime(t.departureDate!.year, t.departureDate!.month, t.departureDate!.day);
-        final daysUntil = depDay.difference(today).inDays;
-        if (daysUntil >= 0 && daysUntil <= 10 && tripReceipts.isEmpty) count++;
-      }
-
-      // Post-travel: within 15 days after return
-      if (t.returnDate != null) {
-        final retDay = DateTime(t.returnDate!.year, t.returnDate!.month, t.returnDate!.day);
-        final daysSince = today.difference(retDay).inDays;
-        if (daysSince > 0 && daysSince <= 15) count++;
-      }
-    }
-    return count;
-  }
+  int get _alertCount => _backendAlertCount;
 
   Future<void> _handleScan(ImageSource source) async {
     setState(() => _showScanMenu = false);
@@ -296,9 +286,15 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
         _analyticsService = AnalyticsService(receipts: _receipts, trips: _trips);
       });
 
-      // Auto-dismiss after 2 seconds
+      // Auto-dismiss after 2 seconds, then show meal type picker if Meals
       Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) setState(() => _isUploading = false);
+        if (mounted) {
+          setState(() => _isUploading = false);
+          final cat = (result.receipt.travelCategory ?? result.receipt.category ?? '').toLowerCase();
+          if (cat == 'meals') {
+            _showMealTypePicker(result.receipt);
+          }
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -307,6 +303,166 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to upload: $e'), backgroundColor: Colors.red),
       );
+    }
+  }
+
+  Future<void> _showMealTypePicker(Receipt receipt) async {
+    const mealTypes = [
+      {'key': 'breakfast', 'label': 'Breakfast', 'icon': Icons.free_breakfast_outlined, 'color': Color(0xFFF59E0B)},
+      {'key': 'lunch', 'label': 'Lunch', 'icon': Icons.lunch_dining_outlined, 'color': Color(0xFF3B82F6)},
+      {'key': 'dinner', 'label': 'Dinner', 'icon': Icons.dinner_dining_outlined, 'color': Color(0xFF8B5CF6)},
+      {'key': 'incidentals', 'label': 'Incidentals', 'icon': Icons.receipt_long_outlined, 'color': Color(0xFF6B7280)},
+      {'key': 'hospitality', 'label': 'Hospitality', 'icon': Icons.local_bar_outlined, 'color': Color(0xFFE8A824)},
+    ];
+
+    String? selected;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Container(
+          margin: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Drag handle
+                  Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Icon circle
+                  Container(
+                    width: 56, height: 56,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF46166B).withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.restaurant_menu, color: Color(0xFF46166B), size: 28),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'What type of meal?',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Help us categorize your meal expense',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                  ),
+                  const SizedBox(height: 20),
+                  // Meal type chips
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.center,
+                    children: mealTypes.map((mt) {
+                      final isSelected = selected == mt['key'];
+                      final color = mt['color'] as Color;
+                      return GestureDetector(
+                        onTap: () => setSheetState(() => selected = mt['key'] as String),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isSelected ? color.withOpacity(0.15) : Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected ? color : Colors.grey.shade200,
+                              width: isSelected ? 2 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(mt['icon'] as IconData, size: 20, color: isSelected ? color : Colors.grey.shade400),
+                              const SizedBox(width: 8),
+                              Text(
+                                mt['label'] as String,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                  color: isSelected ? color : Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+                  // Confirm button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: selected != null ? () => Navigator.pop(ctx) : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF46166B),
+                        disabledBackgroundColor: Colors.grey.shade200,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        'Confirm',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: selected != null ? Colors.white : Colors.grey.shade400,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Skip button
+                  TextButton(
+                    onPressed: () {
+                      selected = null;
+                      Navigator.pop(ctx);
+                    },
+                    child: Text(
+                      'Skip for now',
+                      style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (selected == null || !mounted) return;
+
+    // Save meal type to backend
+    try {
+      final updated = await _api.updateMealType(receipt.id, selected!);
+      if (mounted) {
+        setState(() {
+          final idx = _receipts.indexWhere((r) => r.id == receipt.id);
+          if (idx >= 0) _receipts[idx] = updated;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save meal type: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -740,14 +896,8 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
       backgroundColor: const Color(0xFFFAFAFA),
       body: Stack(
         children: [
-          // Main content
-          _tabIndex == 0
-              ? _buildHomeTab()
-              : AnalyticsPage(
-                  analyticsService: _analyticsService,
-                  onTripTap: () => _loadData(silent: true),
-                  onBack: () => setState(() => _tabIndex = 0),
-                ),
+          // Main content — always home tab
+          _buildHomeTab(),
 
           // Dropdown overlay — tap to close
           if (_dropdownOpen)
@@ -797,7 +947,7 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
           ],
 
           // Add New Trip floating pill
-          if (_tabIndex == 0 && !_showScanMenu)
+          if (!_showScanMenu)
             Positioned(
               right: 20,
               bottom: 24,
@@ -1011,6 +1161,7 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
             }),
             _dropdownItem(Icons.settings_outlined, 'Settings', onTap: () {
               setState(() => _dropdownOpen = false);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
             }),
             _dropdownItem(Icons.help_outline, 'Help & Support', onTap: () {
               setState(() => _dropdownOpen = false);
@@ -1074,7 +1225,166 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
     );
 
     if (activeTrip == null) {
-      // no active trip — show welcome message
+      // check for the nearest upcoming trip
+      final upcomingTrips = _trips.where((t) {
+        if (t.departureDate == null) return false;
+        final start = DateTime(t.departureDate!.year, t.departureDate!.month, t.departureDate!.day);
+        final today = DateTime(now.year, now.month, now.day);
+        return start.isAfter(today);
+      }).toList()
+        ..sort((a, b) => a.departureDate!.compareTo(b.departureDate!));
+
+      final upcomingTrip = upcomingTrips.isNotEmpty ? upcomingTrips.first : null;
+
+      if (upcomingTrip != null) {
+        // show upcoming trip card
+        final receiptCount = _receipts.where((r) => r.tripId == upcomingTrip.id).length;
+        final totalExpenses = upcomingTrip.totalExpenses;
+        final dollars = totalExpenses.truncate().toString();
+        final cents = ((totalExpenses * 100).truncate() % 100).toString().padLeft(2, '0');
+        final daysUntil = DateTime(upcomingTrip.departureDate!.year, upcomingTrip.departureDate!.month, upcomingTrip.departureDate!.day)
+            .difference(DateTime(now.year, now.month, now.day)).inDays;
+        final daysLabel = daysUntil == 1 ? 'Starts tomorrow' : 'Starts in $daysUntil days';
+
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFFFDF6E3), Color(0xFFFBF0D1)],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE8A824).withOpacity(0.2)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            children: [
+              Positioned(
+                top: 0, left: 0, right: 0,
+                child: Container(
+                  height: 3,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF46166B), Color(0xFFE8A824), Color(0xFF46166B)],
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE8A824).withValues(alpha: 0.1)),
+                      ),
+                      child: const Icon(
+                        Icons.flight_takeoff,
+                        color: Color(0xFFB08D3A),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'UPCOMING TRIP',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                              color: Color(0xFF9A7A2E),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            upcomingTrip.tripPurpose ?? 'Trip',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1A1A2E),
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.receipt_long, size: 13, color: Color(0xFF9A7A2E)),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$receiptCount receipts',
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF9A7A2E)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF8E1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6, height: 6,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFE8A824),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                daysLabel,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFFB08D3A),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        RichText(
+                          text: TextSpan(
+                            children: [
+                              TextSpan(
+                                text: '\$$dollars',
+                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)),
+                              ),
+                              TextSpan(
+                                text: '.$cents',
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      // no active or upcoming trip
       return Container(
         width: double.infinity,
         decoration: BoxDecoration(
@@ -1115,7 +1425,7 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'You don\'t have any active trip at the moment.',
+                    'You don\'t have any active or upcoming trip at the moment.',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w400,
@@ -1134,8 +1444,8 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
     // active trip found — show active trip card
     final receiptCount = _receipts.where((r) => r.tripId == activeTrip.id).length;
     final totalExpenses = activeTrip.totalExpenses;
-    final dollars = totalExpenses.toStringAsFixed(0);
-    final cents = (totalExpenses * 100 % 100).toStringAsFixed(0).padLeft(2, '0');
+    final dollars = totalExpenses.truncate().toString();
+    final cents = ((totalExpenses * 100).truncate() % 100).toString().padLeft(2, '0');
 
     return Container(
       width: double.infinity,
@@ -1311,13 +1621,12 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
                     builder: (_) => ReceiptsPage(
                       receipts: _receipts,
                       trips: _trips,
+                      onRefresh: () => _loadData(silent: true),
                     ),
                   ),
                 );
                 if (!mounted) return;
-                if (result == 'analytics') {
-                  setState(() => _tabIndex = 1);
-                } else if (result == 'scan') {
+                if (result == 'scan') {
                   setState(() => _showScanMenu = true);
                 }
               },
@@ -1367,10 +1676,12 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
                       receipts: _receipts,
                       userName: widget.user.name,
                       onTripTap: () => _loadData(silent: true),
+                      initialAlerts: _cachedAlerts,
                     ),
                   ),
                 );
                 _loadData(silent: true);
+                _loadAlerts();
               },
             ),
           ),
@@ -1463,8 +1774,9 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
   // ─── Recent Scans ──────────────────────────────────
 
   List<Receipt> get _recentScans {
-    final sorted = List<Receipt>.from(_receipts)
-      ..sort((a, b) => (b.date ?? DateTime(2000)).compareTo(a.date ?? DateTime(2000)));
+    final sorted = List<Receipt>.from(
+      _receipts.where((r) => !r.isPlaceholder),
+    )..sort((a, b) => (b.date ?? DateTime(2000)).compareTo(a.date ?? DateTime(2000)));
     return sorted.take(3).toList();
   }
 
@@ -1529,22 +1841,185 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
     return labels[cat] ?? cat;
   }
 
+
+  Future<bool> _confirmDeleteReceipt(Receipt receipt) async {
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56, height: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF46166B).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.delete_outline, color: Color(0xFF46166B), size: 28),
+              ),
+              const SizedBox(height: 16),
+              const Text('Delete Receipt?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+              const SizedBox(height: 8),
+              Text(
+                'Are you sure you want to delete "${receipt.merchant ?? 'this receipt'}"? This action cannot be undone.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade500, height: 1.4),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(ctx, false),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text('Cancel', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(ctx, true),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFF46166B), Color(0xFF7B3FA0)]),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Text('Delete', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (confirmed != true) return false;
+    try {
+      await _api.deleteReceipt(receipt.id);
+      _loadData(silent: true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFF46166B),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                SizedBox(width: 10),
+                Text('Receipt deleted successfully', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+        );
+      }
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red.shade600,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Failed to delete: $e', style: const TextStyle(color: Colors.white))),
+              ],
+            ),
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  static const _mealTypeColors = {
+    'breakfast': Color(0xFFF59E0B),
+    'lunch': Color(0xFF3B82F6),
+    'dinner': Color(0xFF8B5CF6),
+    'incidentals': Color(0xFF6B7280),
+    'hospitality': Color(0xFFE8A824),
+  };
+
+  static const _mealTypeLabels = {
+    'breakfast': 'Breakfast',
+    'lunch': 'Lunch',
+    'dinner': 'Dinner',
+    'incidentals': 'Incidentals',
+    'hospitality': 'Hospitality',
+  };
+
+  Widget _mealTypeTag(String mealType) {
+    final color = _mealTypeColors[mealType] ?? const Color(0xFF6B7280);
+    final label = _mealTypeLabels[mealType] ?? mealType;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   Widget _recentScanCard(Receipt receipt) {
     final category = _receiptCategoryLabel(receipt);
     final dateStr = receipt.date != null
         ? DateFormat('MMM d, y').format(receipt.date!)
         : '';
 
-    return GestureDetector(
+    return Dismissible(
+      key: Key(receipt.id),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) => _confirmDeleteReceipt(receipt),
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF46166B),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 24),
+        child: const Icon(Icons.delete_outline, color: Colors.white, size: 24),
+      ),
+      child: GestureDetector(
       onTap: () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => ReceiptDetailViewPage(
-            receipt: receipt,
-            trips: _trips,
-          )),
-        );
-        _loadData(silent: true);
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ReceiptDetailViewPage(
+              receipt: receipt,
+              trips: _trips,
+            )),
+          );
+          _loadData(silent: true);
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
@@ -1618,6 +2093,10 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
                           ),
                         ),
                       ),
+                      if (receipt.mealType != null) ...[
+                        const SizedBox(width: 6),
+                        _mealTypeTag(receipt.mealType!),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -1654,6 +2133,7 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -1930,22 +2410,38 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Home
-              _navItem(
-                icon: Icons.home_outlined,
-                activeIcon: Icons.home,
-                label: 'Home',
-                index: 0,
+              // Home (always active)
+              SizedBox(
+                width: 56,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.home, size: 22, color: Color(0xFF46166B)),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Home',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF46166B),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF46166B),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               // Center Scan FAB
               _buildScanFab(),
-              // Analytics
-              _navItem(
-                icon: Icons.bar_chart_rounded,
-                activeIcon: Icons.bar_chart_rounded,
-                label: 'Analytics',
-                index: 1,
-              ),
+              // Alerts
+              _alertsNavItem(),
             ],
           ),
         ),
@@ -1953,46 +2449,72 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
     );
   }
 
-  Widget _navItem({
-    required IconData icon,
-    required IconData activeIcon,
-    required String label,
-    required int index,
-  }) {
-    final isActive = _tabIndex == index;
+  Widget _alertsNavItem() {
     return GestureDetector(
-      onTap: () => setState(() => _tabIndex = index),
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AlertsPage(
+              trips: _trips,
+              receipts: _receipts,
+              userName: widget.user.name,
+              onTripTap: () => _loadData(silent: true),
+              initialAlerts: _cachedAlerts,
+            ),
+          ),
+        );
+        _loadData(silent: true);
+        _loadAlerts();
+      },
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
         width: 56,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              size: 22,
-              color: isActive ? const Color(0xFF46166B) : const Color(0xFFD1D5DB),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  Icons.notifications_outlined,
+                  size: 22,
+                  color: const Color(0xFFD1D5DB),
+                ),
+                if (_alertCount > 0)
+                  Positioned(
+                    top: -4,
+                    right: -6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade500,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      constraints: const BoxConstraints(minWidth: 16),
+                      child: Text(
+                        '$_alertCount',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 2),
             Text(
-              label,
+              'Alerts',
               style: TextStyle(
                 fontSize: 10,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                color: isActive ? const Color(0xFF46166B) : const Color(0xFF9CA3AF),
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF9CA3AF),
               ),
             ),
-            if (isActive) ...[
-              const SizedBox(height: 4),
-              Container(
-                width: 5,
-                height: 5,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF46166B),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ],
           ],
         ),
       ),

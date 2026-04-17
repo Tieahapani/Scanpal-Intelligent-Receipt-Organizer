@@ -8,6 +8,7 @@ import 'receipt.dart';
 import 'env.dart';
 import 'auth_service.dart';
 import 'models/user.dart';
+import 'departments.dart';
 import 'models/trip.dart';
 
 sealed class LoginResponse {}
@@ -130,6 +131,7 @@ class APIService {
     String? password,
     String? name,
     String? department,
+    String? departmentId,
   }) async {
     final uri = Uri.parse('$baseUrl/auth/login');
     debugPrint('POST $uri');
@@ -141,6 +143,7 @@ class APIService {
     if (password != null && password.isNotEmpty) body['password'] = password;
     if (name != null) body['name'] = name;
     if (department != null) body['department'] = department;
+    if (departmentId != null) body['department_id'] = departmentId;
 
     final res = await http
         .post(uri,
@@ -217,6 +220,86 @@ class APIService {
 
     if (res.statusCode != 200) {
       final error = jsonDecode(res.body)['error'] ?? 'Failed to set password';
+      throw Exception(error);
+    }
+  }
+
+  // ─── Password Reset ──────────────────────────────────
+
+  Future<void> forgotPassword(String email) async {
+    final uri = Uri.parse('$baseUrl/auth/forgot-password');
+    final res = await http
+        .post(uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email}))
+        .timeout(_timeout);
+
+    if (res.statusCode != 200) {
+      final error = jsonDecode(res.body)['error'] ?? 'Request failed';
+      throw Exception(error);
+    }
+  }
+
+  Future<String> verifyResetOtp(String email, String code) async {
+    final uri = Uri.parse('$baseUrl/auth/verify-reset-otp');
+    final res = await http
+        .post(uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email, 'code': code}))
+        .timeout(_timeout);
+
+    if (res.statusCode != 200) {
+      final error = jsonDecode(res.body)['error'] ?? 'Verification failed';
+      throw Exception(error);
+    }
+
+    final data = jsonDecode(res.body);
+    return data['reset_token'] as String;
+  }
+
+  Future<void> resetPassword(String resetToken, String password) async {
+    final uri = Uri.parse('$baseUrl/auth/reset-password');
+    final res = await http
+        .post(uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'reset_token': resetToken, 'password': password}))
+        .timeout(_timeout);
+
+    if (res.statusCode != 200) {
+      final error = jsonDecode(res.body)['error'] ?? 'Password reset failed';
+      throw Exception(error);
+    }
+  }
+
+  // ─── Change Password (authenticated) ─────────────────
+
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    final uri = Uri.parse('$baseUrl/auth/change-password');
+    final headers = await _authHeaders();
+    final res = await http
+        .post(uri,
+            headers: headers,
+            body: jsonEncode({
+              'current_password': currentPassword,
+              'new_password': newPassword,
+            }))
+        .timeout(_timeout);
+
+    if (res.statusCode != 200) {
+      final error = jsonDecode(res.body)['error'] ?? 'Failed to change password';
+      throw Exception(error);
+    }
+  }
+
+  // ─── Delete Account ─────────────────────────────────
+
+  Future<void> deleteAccount() async {
+    final uri = Uri.parse('$baseUrl/auth/delete-account');
+    final headers = await _authHeaders();
+    final res = await http.delete(uri, headers: headers).timeout(_timeout);
+
+    if (res.statusCode != 200) {
+      final error = jsonDecode(res.body)['error'] ?? 'Failed to delete account';
       throw Exception(error);
     }
   }
@@ -337,6 +420,22 @@ class APIService {
     });
   }
 
+  Future<Receipt> updateReceipt(String receiptId, Map<String, dynamic> fields) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/receipts/$receiptId');
+      final token = await AuthService.instance.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final res = await http.patch(uri, headers: headers, body: jsonEncode(fields)).timeout(_timeout);
+      if (res.statusCode != 200) {
+        throw Exception('Update receipt failed: ${res.statusCode}');
+      }
+      return Receipt.fromMap(jsonDecode(res.body));
+    });
+  }
+
   Future<Receipt> updatePaymentMethod(String receiptId, String paymentMethod) async {
     return _withRetry(() async {
       final uri = Uri.parse('$baseUrl/receipts/$receiptId/payment-method');
@@ -352,6 +451,157 @@ class APIService {
         throw Exception('Update payment method failed: ${res.statusCode}');
       }
       return Receipt.fromMap(jsonDecode(res.body));
+    });
+  }
+
+  Future<Receipt> updateMealType(String receiptId, String mealType) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/receipts/$receiptId/meal-type');
+      final headers = await _authHeaders();
+      final res = await http
+          .patch(uri, headers: headers, body: jsonEncode({'meal_type': mealType}))
+          .timeout(_timeout);
+      debugPrint('PATCH /receipts/$receiptId/meal-type ${res.statusCode}');
+      if (res.statusCode != 200) {
+        throw Exception('Update meal type failed: ${res.statusCode}');
+      }
+      return Receipt.fromMap(jsonDecode(res.body));
+    });
+  }
+
+  // ── Alerts ──
+
+  // ── Pending Reviews (admin-only) ──
+
+  Future<List<Map<String, dynamic>>> fetchPendingReviews() async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/pending-reviews');
+      final headers = await _authHeaders();
+      final res = await http.get(uri, headers: headers).timeout(_timeout);
+      debugPrint('GET /pending-reviews ${res.statusCode}');
+      if (res.statusCode != 200) throw Exception('Fetch pending reviews failed: ${res.statusCode}');
+      return List<Map<String, dynamic>>.from(jsonDecode(res.body));
+    });
+  }
+
+  Future<Map<String, dynamic>> approvePendingReview(String reviewId) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/pending-reviews/$reviewId/approve');
+      final headers = await _authHeaders();
+      final res = await http.post(uri, headers: headers).timeout(_timeout);
+      debugPrint('POST /pending-reviews/$reviewId/approve ${res.statusCode}');
+      if (res.statusCode != 200) throw Exception('Approve failed: ${res.statusCode}');
+      return Map<String, dynamic>.from(jsonDecode(res.body));
+    });
+  }
+
+  Future<void> commentPendingReview(String reviewId, String comment) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/pending-reviews/$reviewId/comment');
+      final headers = await _authHeaders();
+      final res = await http.post(uri, headers: headers, body: jsonEncode({'comment': comment})).timeout(_timeout);
+      debugPrint('POST /pending-reviews/$reviewId/comment ${res.statusCode}');
+      if (res.statusCode != 200) throw Exception('Comment failed: ${res.statusCode}');
+    });
+  }
+
+  // ── Traveler Alerts ──
+
+  Future<List<Map<String, dynamic>>> fetchAlerts() async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/alerts');
+      final headers = await _authHeaders();
+      final res = await http.get(uri, headers: headers).timeout(_timeout);
+      debugPrint('GET /alerts ${res.statusCode}');
+      if (res.statusCode != 200) {
+        throw Exception('Fetch alerts failed: ${res.statusCode}');
+      }
+      return List<Map<String, dynamic>>.from(jsonDecode(res.body));
+    });
+  }
+
+  Future<Map<String, dynamic>> updateAlertStatus(String alertId, String status) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/alerts/$alertId/status');
+      final headers = await _authHeaders();
+      final res = await http
+          .patch(uri, headers: headers, body: jsonEncode({'status': status}))
+          .timeout(_timeout);
+      debugPrint('PATCH /alerts/$alertId/status ${res.statusCode}');
+      if (res.statusCode != 200) {
+        throw Exception('Update alert status failed: ${res.statusCode}');
+      }
+      return Map<String, dynamic>.from(jsonDecode(res.body));
+    });
+  }
+
+  Future<Map<String, dynamic>> approveReceipt(String receiptId, {String? comment}) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/receipts/$receiptId/approve');
+      final headers = await _authHeaders();
+      final body = <String, dynamic>{};
+      if (comment != null && comment.trim().isNotEmpty) {
+        body['comment'] = comment.trim();
+      }
+      final res = await http
+          .post(uri, headers: headers, body: jsonEncode(body))
+          .timeout(_timeout);
+      debugPrint('POST /receipts/$receiptId/approve ${res.statusCode}');
+      if (res.statusCode != 200) {
+        throw Exception('Approve receipt failed: ${res.statusCode}');
+      }
+      return Map<String, dynamic>.from(jsonDecode(res.body));
+    });
+  }
+
+  Future<Map<String, dynamic>> addReceiptComment(String receiptId, String comment) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/receipts/$receiptId/comment');
+      final headers = await _authHeaders();
+      final res = await http
+          .post(uri, headers: headers, body: jsonEncode({'comment': comment}))
+          .timeout(_timeout);
+      debugPrint('POST /receipts/$receiptId/comment ${res.statusCode}');
+      if (res.statusCode != 201) {
+        throw Exception('Add receipt comment failed: ${res.statusCode}');
+      }
+      return Map<String, dynamic>.from(jsonDecode(res.body));
+    });
+  }
+
+  Future<Map<String, dynamic>> addTripComment(String tripId, String comment) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/trips/$tripId/comment');
+      final headers = await _authHeaders();
+      final res = await http
+          .post(uri, headers: headers, body: jsonEncode({'comment': comment}))
+          .timeout(_timeout);
+      debugPrint('POST /trips/$tripId/comment ${res.statusCode}');
+      if (res.statusCode != 201) {
+        throw Exception('Add comment failed: ${res.statusCode}');
+      }
+      return Map<String, dynamic>.from(jsonDecode(res.body));
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> searchUsers(String query) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/users/search?q=${Uri.encodeComponent(query)}');
+      final headers = await _authHeaders();
+      final res = await http.get(uri, headers: headers).timeout(_timeout);
+      debugPrint('GET /users/search?q=$query ${res.statusCode}');
+      if (res.statusCode != 200) return <Map<String, dynamic>>[];
+      final list = jsonDecode(res.body) as List;
+      return list.cast<Map<String, dynamic>>();
+    });
+  }
+
+  Future<void> triggerAlertGeneration() async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/alerts/generate');
+      final headers = await _authHeaders();
+      final res = await http.post(uri, headers: headers).timeout(_timeout);
+      debugPrint('POST /alerts/generate ${res.statusCode}');
     });
   }
 
@@ -393,6 +643,17 @@ class APIService {
     });
   }
 
+  Future<Receipt> fetchReceiptById(String receiptId) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/receipts/$receiptId');
+      final headers = await _authHeaders();
+      final res = await http.get(uri, headers: headers).timeout(_timeout);
+      debugPrint('GET /receipts/$receiptId ${res.statusCode}');
+      _checkResponse(res);
+      return Receipt.fromMap(Map<String, dynamic>.from(jsonDecode(res.body)));
+    });
+  }
+
   Future<bool> deleteTrip(String tripId) async {
     try {
       final uri = Uri.parse('$baseUrl/trips/$tripId');
@@ -421,6 +682,31 @@ class APIService {
 
   String receiptImageUrl(String receiptId) {
     return '$baseUrl/receipts/$receiptId/image';
+  }
+
+  Future<({Receipt receipt, Trip? trip})> attachReceiptImage(
+    File image, {required String receiptId}) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/receipts/$receiptId/attach');
+      final token = await AuthService.instance.getToken();
+      final req = http.MultipartRequest('POST', uri)
+        ..files.add(await http.MultipartFile.fromPath('file', image.path));
+      if (token != null) {
+        req.headers['Authorization'] = 'Bearer $token';
+      }
+      final streamed = await req.send().timeout(_timeout);
+      final res = await http.Response.fromStream(streamed);
+      if (res.statusCode != 200) {
+        throw Exception('Attach failed: ${res.statusCode} ${res.body}');
+      }
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final receipt = Receipt.fromMap(Map<String, dynamic>.from(data['receipt'] ?? data));
+      Trip? updatedTrip;
+      if (data['trip'] != null) {
+        updatedTrip = Trip.fromMap(Map<String, dynamic>.from(data['trip']));
+      }
+      return (receipt: receipt, trip: updatedTrip);
+    });
   }
 
   // ─── Admin ────────────────────────────────────────────
@@ -478,6 +764,7 @@ class APIService {
   // ─── Departments ────────────────────────────────────────
 
   static List<String>? _cachedDepartments;
+  static List<Department>? _cachedDeptObjects;
 
   Future<List<String>> fetchDepartmentOptions() async {
     if (_cachedDepartments != null) return _cachedDepartments!;
@@ -492,6 +779,26 @@ class APIService {
     final List<dynamic> data = jsonDecode(res.body);
     _cachedDepartments = data.cast<String>();
     return _cachedDepartments!;
+  }
+
+  /// Returns [Department] objects (name + code) for departments that
+  /// exist in both the master PDF list and in Notion.
+  Future<List<Department>> fetchDepartmentObjects() async {
+    if (_cachedDeptObjects != null) return _cachedDeptObjects!;
+
+    final names = await fetchDepartmentOptions();
+    _cachedDeptObjects = resolvedDepartments(names);
+
+    // If Notion has departments not in the master list, include them
+    // with an empty code so they still appear.
+    final resolvedNames = _cachedDeptObjects!.map((d) => d.name).toSet();
+    for (final name in names) {
+      if (!resolvedNames.contains(name)) {
+        _cachedDeptObjects!.add(Department(name: name, code: ''));
+      }
+    }
+
+    return _cachedDeptObjects!;
   }
 
   // ─── Report Summary (Gemini via backend) ───────────────
@@ -558,4 +865,47 @@ class APIService {
   }
 
   String profileImageUrl() => '$baseUrl/profile/image';
+
+  String travelerImageUrl(String email) =>
+      '$baseUrl/admin/traveler/${Uri.encodeComponent(email)}/image';
+
+  /// Discard a trip and notify the traveler with an optional reason.
+  Future<Map<String, dynamic>> discardTrip(String tripId, {String? comment}) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/trips/$tripId/discard');
+      final headers = await _authHeaders();
+      final body = <String, dynamic>{};
+      if (comment != null && comment.trim().isNotEmpty) {
+        body['comment'] = comment.trim();
+      }
+      final res = await http
+          .post(uri, headers: headers, body: jsonEncode(body))
+          .timeout(_timeout);
+      debugPrint('POST /trips/$tripId/discard ${res.statusCode}');
+      if (res.statusCode != 200) {
+        throw Exception('Discard trip failed: ${res.statusCode}');
+      }
+      return Map<String, dynamic>.from(jsonDecode(res.body));
+    });
+  }
+
+  /// Approve a trip and optionally send a comment to the traveler.
+  Future<Map<String, dynamic>> approveTrip(String tripId, {String? comment}) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/trips/$tripId/approve');
+      final headers = await _authHeaders();
+      final body = <String, dynamic>{};
+      if (comment != null && comment.trim().isNotEmpty) {
+        body['comment'] = comment.trim();
+      }
+      final res = await http
+          .post(uri, headers: headers, body: jsonEncode(body))
+          .timeout(_timeout);
+      debugPrint('POST /trips/$tripId/approve ${res.statusCode}');
+      if (res.statusCode != 200) {
+        throw Exception('Approve trip failed: ${res.statusCode}');
+      }
+      return Map<String, dynamic>.from(jsonDecode(res.body));
+    });
+  }
 }

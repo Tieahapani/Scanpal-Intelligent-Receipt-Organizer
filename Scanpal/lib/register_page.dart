@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'departments.dart';
 import 'traveler_home_page.dart';
 import 'otp_verify_page.dart';
 
@@ -25,13 +26,13 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _obscureConfirm = true;
   bool _agreeTerms = false;
   bool _showDeptDropdown = false;
-  String? _selectedDepartment;
+  Department? _selectedDepartment;
   String? _error;
 
   static const _purple = Color(0xFF46166B);
   static const _gold = Color(0xFFE8A824);
 
-  List<String> _departments = [];
+  List<Department> _departments = [];
 
   @override
   void initState() {
@@ -42,7 +43,7 @@ class _RegisterPageState extends State<RegisterPage> {
   Future<void> _fetchDepartments() async {
     try {
       final api = APIService();
-      final depts = await api.fetchDepartmentOptions();
+      final depts = await api.fetchDepartmentObjects();
       if (mounted) {
         setState(() => _departments = depts);
       }
@@ -86,7 +87,8 @@ class _RegisterPageState extends State<RegisterPage> {
         rememberMe: widget.rememberMe,
         password: _passwordCtrl.text,
         name: _nameCtrl.text.trim(),
-        department: _selectedDepartment,
+        department: _selectedDepartment?.name,
+        departmentId: _selectedDepartment?.code,
       );
 
       if (!mounted) return;
@@ -595,7 +597,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    _selectedDepartment ?? 'Select your department',
+                    _selectedDepartment?.display ?? 'Select your department',
                     style: TextStyle(
                       fontSize: 14,
                       color: _selectedDepartment != null
@@ -644,12 +646,27 @@ class _RegisterPageState extends State<RegisterPage> {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       color: isSelected ? _purple.withValues(alpha: 0.05) : null,
-                      child: Text(
-                        dept,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isSelected ? _purple : const Color(0xFF374151),
-                        ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              dept.name,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isSelected ? _purple : const Color(0xFF374151),
+                              ),
+                            ),
+                          ),
+                          if (dept.code.isNotEmpty)
+                            Text(
+                              dept.code,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: isSelected ? _purple : const Color(0xFF9CA3AF),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   );

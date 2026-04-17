@@ -1,11 +1,15 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 import 'models/trip.dart';
 import 'receipt.dart';
 import 'api.dart';
 import 'auth_service.dart';
 import 'receipt_detail_page.dart';
 import 'travel_calendar.dart';
+import 'receipt_detail_view_page.dart';
 
 class TripDetailPage extends StatefulWidget {
   final Trip trip;
@@ -21,6 +25,9 @@ class _TripDetailPageState extends State<TripDetailPage> {
   late Trip _trip;
   List<Receipt> _receipts = [];
   bool _loading = true;
+  bool _isAdmin = false;
+  final _commentCtrl = TextEditingController();
+  bool _sendingComment = false;
 
   static const _thumbGradients = [
     [Color(0xFF1E3A5F), Color(0xFF4A7FB5)],
@@ -33,12 +40,56 @@ class _TripDetailPageState extends State<TripDetailPage> {
     [Color(0xFF5B2C6F), Color(0xFFA569BD)],
   ];
 
+  void _showToast(String message, {bool isError = false}) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => _TopToast(
+        message: message,
+        isError: isError,
+        onDismiss: () => entry.remove(),
+      ),
+    );
+    overlay.insert(entry);
+  }
+
   @override
   void initState() {
     super.initState();
     _trip = widget.trip;
     _loadReceipts();
     _refreshTrip();
+    _checkAdmin();
+  }
+
+  Future<void> _checkAdmin() async {
+    final isAdmin = await AuthService.instance.getLastRoleIsAdmin();
+    if (mounted) setState(() => _isAdmin = isAdmin);
+  }
+
+  @override
+  void dispose() {
+    _commentCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendComment() async {
+    final text = _commentCtrl.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _sendingComment = true);
+    try {
+      await _api.addTripComment(_trip.id, text);
+      _commentCtrl.clear();
+      if (mounted) {
+        _showToast('Comment sent to traveler');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showToast('Failed to send comment: $e', isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _sendingComment = false);
+    }
   }
 
   Future<void> _loadReceipts() async {
@@ -267,9 +318,7 @@ class _TripDetailPageState extends State<TripDetailPage> {
     if (success) {
       Navigator.pop(context, 'deleted');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to delete trip'), backgroundColor: Colors.red),
-      );
+      _showToast('Failed to delete trip', isError: true);
     }
   }
 
@@ -303,11 +352,19 @@ class _TripDetailPageState extends State<TripDetailPage> {
                   _buildTravelerDurationRow(),
                   const SizedBox(height: 12),
                   _buildViewReceiptsCard(),
+                  if (_isAdmin)
+                    const SizedBox(height: 80), // space for bottom action buttons
                   const SizedBox(height: 40),
                 ],
               ),
             ),
-      bottomNavigationBar: _buildBottomNav(),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_isAdmin) _buildAdminActions(),
+          _buildBottomNav(),
+        ],
+      ),
     );
   }
 
@@ -964,7 +1021,240 @@ class _TripDetailPageState extends State<TripDetailPage> {
         builder: (_) => _TripReceiptsPage(
           trip: _trip,
           receipts: _receipts,
+          onRefresh: () {
+            _loadReceipts();
+            _refreshTrip();
+          },
         ),
+      ),
+    );
+  }
+
+  // ─── Approve Trip ──────────────────────────────────────
+
+  Future<void> _approveTrip() async {
+    try {
+      await _api.approveTrip(_trip.id);
+      if (mounted) {
+        _showToast('Trip approved');
+        _refreshTrip();
+      }
+    } catch (e) {
+      if (mounted) {
+        _showToast('Failed to approve: $e', isError: true);
+      }
+    }
+  }
+
+  // ─── Add Comment Sheet ────────────────────────────────
+
+  void _showCommentSheet() {
+    _commentCtrl.clear();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Add Comment',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(ctx),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(Icons.close, size: 18, color: Colors.grey.shade500),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add a comment about this submission. The traveler will be notified.',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade500, height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _commentCtrl,
+                    maxLines: 4,
+                    minLines: 3,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Please provide a clearer receipt image...',
+                      hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                      filled: true,
+                      fillColor: const Color(0xFFFAFAFA),
+                      contentPadding: const EdgeInsets.all(14),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(ctx),
+                          child: Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _sendComment();
+                          },
+                          child: Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF46166B),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.chat_bubble_outline, size: 16, color: Colors.white),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Send',
+                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Admin Action Buttons ─────────────────────────────
+
+  Widget _buildAdminActions() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: _approveTrip,
+              child: Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFDF6E3),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE8A824).withValues(alpha: 0.3)),
+                ),
+                alignment: Alignment.center,
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check, size: 18, color: Color(0xFF9A7A2E)),
+                    SizedBox(width: 8),
+                    Text('Approve', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF9A7A2E))),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: GestureDetector(
+              onTap: _showCommentSheet,
+              child: Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF46166B).withValues(alpha: 0.3)),
+                ),
+                alignment: Alignment.center,
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.chat_bubble_outline, size: 16, color: Color(0xFF46166B)),
+                    SizedBox(width: 8),
+                    Text('Add Comment', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF46166B))),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1089,8 +1379,9 @@ class _TripDetailPageState extends State<TripDetailPage> {
 class _TripReceiptsPage extends StatefulWidget {
   final Trip trip;
   final List<Receipt> receipts;
+  final VoidCallback? onRefresh;
 
-  const _TripReceiptsPage({required this.trip, required this.receipts});
+  const _TripReceiptsPage({required this.trip, required this.receipts, this.onRefresh});
 
   @override
   State<_TripReceiptsPage> createState() => _TripReceiptsPageState();
@@ -1101,6 +1392,19 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
   final _api = APIService();
   String? _token;
 
+  void _showToast(String message, {bool isError = false}) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => _TopToast(
+        message: message,
+        isError: isError,
+        onDismiss: () => entry.remove(),
+      ),
+    );
+    overlay.insert(entry);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1110,6 +1414,109 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
   Future<void> _loadToken() async {
     final token = await AuthService.instance.getToken();
     if (mounted) setState(() => _token = token);
+  }
+
+  void _attachReceiptToPlaceholder(Receipt receipt) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Icon(Icons.admin_panel_settings, size: 40, color: const Color(0xFFE8A824)),
+              const SizedBox(height: 12),
+              Text(
+                '${receipt.merchant ?? "Expense"} — ${_currency.format(receipt.effectiveTotal)}',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Added by your admin. You can attach your receipt.',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _scanForPlaceholder(receipt);
+                      },
+                      icon: const Icon(Icons.camera_alt),
+                      label: const Text('Scan'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1F2937),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _pickFromGalleryForPlaceholder(receipt);
+                      },
+                      icon: const Icon(Icons.photo_library),
+                      label: const Text('Gallery'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF1F2937),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _scanForPlaceholder(Receipt receipt) async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.camera);
+    if (picked == null) return;
+    await _attachImageToReceipt(receipt, File(picked.path));
+  }
+
+  Future<void> _pickFromGalleryForPlaceholder(Receipt receipt) async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
+    await _attachImageToReceipt(receipt, File(picked.path));
+  }
+
+  Future<void> _attachImageToReceipt(Receipt receipt, File image) async {
+    try {
+      await _api.attachReceiptImage(image, receiptId: receipt.id);
+      if (mounted) {
+        _showToast('Receipt attached successfully');
+        widget.onRefresh?.call();
+      }
+    } catch (e) {
+      if (mounted) {
+        _showToast('Failed to attach: $e', isError: true);
+      }
+    }
   }
 
   List<Receipt> get receipts => widget.receipts;
@@ -1228,23 +1635,168 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
     );
   }
 
+  Future<bool> _confirmDeleteReceipt(Receipt receipt) async {
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56, height: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF46166B).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.delete_outline, color: Color(0xFF46166B), size: 28),
+              ),
+              const SizedBox(height: 16),
+              const Text('Delete Receipt?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+              const SizedBox(height: 8),
+              Text(
+                'Are you sure you want to delete "${receipt.merchant ?? 'this receipt'}"? This action cannot be undone.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade500, height: 1.4),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(ctx, false),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text('Cancel', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(ctx, true),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFF46166B), Color(0xFF7B3FA0)]),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Text('Delete', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (confirmed != true) return false;
+    try {
+      await _api.deleteReceipt(receipt.id);
+      widget.onRefresh?.call();
+      if (mounted) {
+        _showToast('Receipt deleted');
+      }
+      return true;
+    } catch (e) {
+      if (mounted) {
+        _showToast('Failed to delete: $e', isError: true);
+      }
+      return false;
+    }
+  }
+
+  static const _mealTypeColors = {
+    'breakfast': Color(0xFFF59E0B),
+    'lunch': Color(0xFF3B82F6),
+    'dinner': Color(0xFF8B5CF6),
+    'incidentals': Color(0xFF6B7280),
+    'hospitality': Color(0xFFE8A824),
+  };
+
+  static const _mealTypeLabels = {
+    'breakfast': 'Breakfast',
+    'lunch': 'Lunch',
+    'dinner': 'Dinner',
+    'incidentals': 'Incidentals',
+    'hospitality': 'Hospitality',
+  };
+
+  Widget _mealTypeTag(String mealType) {
+    final color = _mealTypeColors[mealType] ?? const Color(0xFF6B7280);
+    final label = _mealTypeLabels[mealType] ?? mealType;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   Widget _receiptCard(BuildContext context, Receipt receipt) {
     final dateStr = receipt.date != null
         ? DateFormat('MMM d, yyyy').format(receipt.date!)
         : 'No date';
     final catLabel = _categoryLabel(receipt);
 
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => ReceiptDetailPage(receipt: receipt)),
+    return Dismissible(
+      key: Key(receipt.id),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) => _confirmDeleteReceipt(receipt),
+      background: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF46166B),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 24),
+        child: const Icon(Icons.delete_outline, color: Colors.white, size: 24),
       ),
+      child: GestureDetector(
+      onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ReceiptDetailViewPage(
+              receipt: receipt,
+              trips: [widget.trip],
+            )),
+          );
+          widget.onRefresh?.call();
+      },
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: receipt.isPlaceholder ? const Color(0xFFFFF8E1) : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade100),
+          border: Border.all(
+            color: receipt.isPlaceholder
+                ? const Color(0xFFE8A824).withOpacity(0.3)
+                : Colors.grey.shade100,
+          ),
         ),
         child: Row(
           children: [
@@ -1326,6 +1878,8 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
                             ),
                           ),
                         ),
+                        if (receipt.mealType != null)
+                          _mealTypeTag(receipt.mealType!),
                       ],
                     ),
                   const SizedBox(height: 4),
@@ -1356,6 +1910,7 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -1465,7 +2020,26 @@ class _EditTripSheetState extends State<_EditTripSheet> {
   late TextEditingController _nameCtrl;
   late TextEditingController _destCtrl;
   late TextEditingController _descCtrl;
-  late TextEditingController _travelersCtrl;
+  final _travelerSearchCtrl = TextEditingController();
+  final _travelerSearchFocus = FocusNode();
+  List<Map<String, dynamic>> _selectedTravelers = [];
+  List<Map<String, dynamic>> _travelerSuggestions = [];
+  Timer? _searchDebounce;
+  bool _showSuggestions = false;
+
+  void _showToast(String message, {bool isError = false}) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => _TopToast(
+        message: message,
+        isError: isError,
+        onDismiss: () => entry.remove(),
+      ),
+    );
+    overlay.insert(entry);
+  }
+
   DateTime? _startDate;
   DateTime? _endDate;
   String _category = 'Conference';
@@ -1485,7 +2059,14 @@ class _EditTripSheetState extends State<_EditTripSheet> {
     _destCtrl = TextEditingController(text: t.destination ?? '');
     _travelType = t.travelType;
     _descCtrl = TextEditingController(text: t.description ?? '');
-    _travelersCtrl = TextEditingController(text: t.travelers ?? '');
+    // Parse existing travelers (comma-separated emails) into chip data
+    if (t.travelers != null && t.travelers!.trim().isNotEmpty) {
+      for (final email in t.travelers!.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty)) {
+        _selectedTravelers.add({'name': email, 'email': email});
+      }
+      // Resolve names from backend
+      _resolveExistingTravelers();
+    }
     _startDate = t.departureDate;
     _endDate = t.returnDate;
     _category = t.category ?? _inferCategory(t.tripPurpose);
@@ -1513,7 +2094,9 @@ class _EditTripSheetState extends State<_EditTripSheet> {
     _nameCtrl.dispose();
     _destCtrl.dispose();
     _descCtrl.dispose();
-    _travelersCtrl.dispose();
+    _travelerSearchCtrl.dispose();
+    _travelerSearchFocus.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -1543,7 +2126,7 @@ class _EditTripSheetState extends State<_EditTripSheet> {
         'category': _category,
         'status': _status.toLowerCase(),
         'description': _descCtrl.text.trim(),
-        'travelers': _travelersCtrl.text.trim(),
+        'travelers': _selectedTravelers.map((t) => t['email']).join(','),
       };
 
       debugPrint('Saving trip updates: $updates');
@@ -1555,9 +2138,7 @@ class _EditTripSheetState extends State<_EditTripSheet> {
     } catch (e) {
       debugPrint('Edit trip save error: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save: $e'), backgroundColor: Colors.red),
-      );
+      _showToast('Failed to save: $e', isError: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -1784,10 +2365,10 @@ class _EditTripSheetState extends State<_EditTripSheet> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  // Travelers
-                  _fieldLabel('TRAVELERS (COMMA-SEPARATED)'),
+                  // Co-Travelers
+                  _fieldLabel('CO-TRAVELERS'),
                   const SizedBox(height: 5),
-                  _textField(_travelersCtrl, 'e.g. Princy R., Alex M.'),
+                  _buildTravelerChipField(),
                   const SizedBox(height: 22),
                   // Save button
                   GestureDetector(
@@ -1832,6 +2413,211 @@ class _EditTripSheetState extends State<_EditTripSheet> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _resolveExistingTravelers() async {
+    // Try to resolve emails to names via search
+    final resolved = <Map<String, dynamic>>[];
+    for (final t in _selectedTravelers) {
+      try {
+        final results = await _api.searchUsers(t['email']);
+        final match = results.firstWhere(
+          (r) => r['email'] == t['email'],
+          orElse: () => t,
+        );
+        resolved.add(match);
+      } catch (_) {
+        resolved.add(t);
+      }
+    }
+    if (mounted) setState(() => _selectedTravelers = resolved);
+  }
+
+  void _onTravelerSearch(String query) {
+    _searchDebounce?.cancel();
+    if (query.trim().length < 2) {
+      setState(() {
+        _travelerSuggestions = [];
+        _showSuggestions = false;
+      });
+      return;
+    }
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final results = await _api.searchUsers(query.trim());
+        final selectedEmails = _selectedTravelers.map((t) => t['email']).toSet();
+        final filtered = results.where((r) => !selectedEmails.contains(r['email'])).toList();
+        if (mounted) {
+          setState(() {
+            _travelerSuggestions = filtered;
+            _showSuggestions = filtered.isNotEmpty;
+          });
+        }
+      } catch (_) {}
+    });
+  }
+
+  void _addTraveler(Map<String, dynamic> user) {
+    setState(() {
+      _selectedTravelers.add(user);
+      _travelerSearchCtrl.clear();
+      _travelerSuggestions = [];
+      _showSuggestions = false;
+    });
+    _travelerSearchFocus.requestFocus();
+  }
+
+  void _removeTraveler(String email) {
+    setState(() {
+      _selectedTravelers.removeWhere((t) => t['email'] == email);
+    });
+  }
+
+  Widget _buildTravelerChipField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_selectedTravelers.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _selectedTravelers.map((t) {
+                      return Container(
+                        padding: const EdgeInsets.fromLTRB(10, 5, 4, 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF46166B).withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              t['name'] ?? t['email'],
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF46166B),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: () => _removeTraveler(t['email']),
+                              child: Container(
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF46166B).withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close, size: 10, color: Color(0xFF46166B)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              TextField(
+                controller: _travelerSearchCtrl,
+                focusNode: _travelerSearchFocus,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF1F2937)),
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  hintText: _selectedTravelers.isEmpty ? 'Search by name...' : 'Add another...',
+                  hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                  isDense: true,
+                ),
+                onChanged: _onTravelerSearch,
+              ),
+            ],
+          ),
+        ),
+        if (_showSuggestions)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: _travelerSuggestions.map((user) {
+                return InkWell(
+                  onTap: () => _addTraveler(user),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF46166B).withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            (user['name'] ?? '?')[0].toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF46166B),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                user['name'] ?? '',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1F2937),
+                                ),
+                              ),
+                              Text(
+                                '${user['email']}${user['department'] != null ? ' · ${user['department']}' : ''}',
+                                style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.add_circle_outline, size: 16, color: Colors.grey.shade400),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+      ],
     );
   }
 
@@ -1886,6 +2672,135 @@ class _EditTripSheetState extends State<_EditTripSheet> {
           style: TextStyle(
             fontSize: 13,
             color: value == 'Select' ? Colors.grey.shade400 : const Color(0xFF1F2937),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TopToast extends StatefulWidget {
+  final String message;
+  final bool isError;
+  final VoidCallback onDismiss;
+
+  const _TopToast({
+    required this.message,
+    required this.isError,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_TopToast> createState() => _TopToastState();
+}
+
+class _TopToastState extends State<_TopToast> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<Offset> _slide;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
+    _slide = Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    _fade = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _ctrl.forward();
+    Future.delayed(const Duration(seconds: 3), _dismiss);
+  }
+
+  void _dismiss() {
+    if (!mounted) return;
+    _ctrl.reverse().then((_) {
+      if (mounted) widget.onDismiss();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final top = MediaQuery.of(context).padding.top;
+    return Positioned(
+      top: top + 8,
+      left: 16,
+      right: 16,
+      child: SlideTransition(
+        position: _slide,
+        child: FadeTransition(
+          opacity: _fade,
+          child: GestureDetector(
+            onVerticalDragUpdate: (d) {
+              if (d.primaryDelta != null && d.primaryDelta! < -4) _dismiss();
+            },
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: widget.isError ? const Color(0xFFFEE2E2) : const Color(0xFFECFDF5),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: widget.isError ? const Color(0xFFFCA5A5) : const Color(0xFF6EE7B7),
+                    width: 0.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 20,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: widget.isError
+                            ? const Color(0xFFDC2626).withValues(alpha: 0.1)
+                            : const Color(0xFF059669).withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        widget.isError ? Icons.error_outline : Icons.check_circle_outline,
+                        size: 18,
+                        color: widget.isError ? const Color(0xFFDC2626) : const Color(0xFF059669),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        widget.message,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: widget.isError ? const Color(0xFF991B1B) : const Color(0xFF065F46),
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _dismiss,
+                      child: Icon(
+                        Icons.close,
+                        size: 16,
+                        color: widget.isError
+                            ? const Color(0xFF991B1B).withValues(alpha: 0.5)
+                            : const Color(0xFF065F46).withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
