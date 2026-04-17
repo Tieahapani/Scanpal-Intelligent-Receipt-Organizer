@@ -7,3 +7,4 @@ uploads/
 rag/faiss_index/
 Scanpal/backend/
 flutter/
+Scanpal/backend/.env
