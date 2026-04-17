@@ -7,7 +7,7 @@ import bcrypt
 import threading
 from datetime import datetime, timezone, timedelta
 
-from flask import Flask, request, jsonify, g, send_file
+from flask import Flask, request, jsonify, g, Response
 from dotenv import load_dotenv
 from flask_cors import CORS
 import google.generativeai as genai
@@ -23,6 +23,7 @@ import jwt
 from azure_ocr import analyze_receipt_azure
 from email_utils import send_otp_email
 from unsplash import fetch_destination_image
+from storage import upload_file, download_file, delete_file, delete_files, get_public_url
 
 # Load environment variables
 load_dotenv()
@@ -81,9 +82,7 @@ TRAVEL_CATEGORIES = [
     "Other AS Cost",
 ]
 
-# Upload directory for receipt images
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# File storage is handled by Supabase Storage (see storage.py)
 
 
 # =============================================================================
@@ -631,18 +630,12 @@ def delete_account():
 
         # Delete user's receipts and their image files
         receipts = db.query(Receipt).filter(Receipt.user_id == user.id).all()
-        for receipt in receipts:
-            if receipt.image_filename:
-                img_path = os.path.join("uploads", receipt.image_filename)
-                if os.path.exists(img_path):
-                    os.remove(img_path)
-            db.delete(receipt)
-
-        # Delete profile image if exists
+        images_to_delete = [r.image_url for r in receipts if r.image_url]
         if user.profile_image:
-            profile_path = os.path.join("uploads", "profiles", user.profile_image)
-            if os.path.exists(profile_path):
-                os.remove(profile_path)
+            images_to_delete.append(user.profile_image)
+        delete_files(images_to_delete)
+        for receipt in receipts:
+            db.delete(receipt)
 
         # Delete the user
         db.delete(user)
@@ -1166,11 +1159,8 @@ def _sync_trips_from_notion(db, email):
             # Also delete associated alerts and receipts
             db.query(Alert).filter(Alert.trip_id == trip.id).delete()
             receipts = db.query(Receipt).filter(Receipt.trip_id == trip.id).all()
+            delete_files([r.image_url for r in receipts if r.image_url])
             for r in receipts:
-                if r.image_url:
-                    image_path = os.path.join(UPLOAD_DIR, r.image_url)
-                    if os.path.exists(image_path):
-                        os.remove(image_path)
                 db.delete(r)
             db.delete(trip)
             logging.info(f"Removed trip {trip.id} (Notion page {trip.notion_page_id} no longer exists)")
@@ -1337,12 +1327,10 @@ Return ONLY valid JSON in this EXACT format (no markdown, no extra text):
         data["travel_category"] = detected_category
         data["category"] = detected_category  # backward compat
 
-        # Save receipt image
+        # Save receipt image to Supabase Storage
         receipt_id = str(uuid.uuid4())
         image_filename = f"{receipt_id}.jpg"
-        image_path = os.path.join(UPLOAD_DIR, image_filename)
-        with open(image_path, "wb") as f:
-            f.write(img)
+        upload_file(image_filename, img)
 
         # Save to PostgreSQL
         db = SessionLocal()
@@ -1542,11 +1530,9 @@ def attach_receipt_image(receipt_id):
             pil_img.save(buf, format="JPEG", quality=80)
             img = buf.getvalue()
 
-        # Save image file
+        # Save image file to Supabase Storage
         filename = f"{uuid.uuid4()}.jpg"
-        filepath = os.path.join(UPLOAD_DIR, filename)
-        with open(filepath, "wb") as f:
-            f.write(img)
+        upload_file(filename, img)
 
         # Update the placeholder receipt with the image
         receipt.image_url = filename
@@ -1662,11 +1648,11 @@ def get_receipt_image(receipt_id):
         if not receipt.image_url:
             return jsonify({"error": "No image available"}), 404
 
-        image_path = os.path.join(UPLOAD_DIR, receipt.image_url)
-        if not os.path.exists(image_path):
+        try:
+            data = download_file(receipt.image_url)
+            return Response(data, mimetype="image/jpeg")
+        except Exception:
             return jsonify({"error": "Image file not found"}), 404
-
-        return send_file(image_path, mimetype="image/jpeg")
     finally:
         db.close()
 
@@ -1694,15 +1680,12 @@ def upload_profile_image():
 
         # Delete old profile image if exists
         if user.profile_image:
-            old_path = os.path.join(UPLOAD_DIR, user.profile_image)
-            if os.path.exists(old_path):
-                os.remove(old_path)
+            delete_file(user.profile_image)
 
-        # Save new image
+        # Save new image to Supabase Storage
         ext = os.path.splitext(file.filename)[1] or ".jpg"
         filename = f"profile_{user.id}{ext}"
-        filepath = os.path.join(UPLOAD_DIR, filename)
-        file.save(filepath)
+        upload_file(filename, file.read())
 
         user.profile_image = filename
         db.commit()
@@ -1727,9 +1710,7 @@ def delete_profile_image():
             return jsonify({"error": "User not found"}), 404
 
         if user.profile_image:
-            old_path = os.path.join(UPLOAD_DIR, user.profile_image)
-            if os.path.exists(old_path):
-                os.remove(old_path)
+            delete_file(user.profile_image)
             user.profile_image = None
             db.commit()
 
@@ -1752,11 +1733,11 @@ def get_profile_image():
         if not user or not user.profile_image:
             return jsonify({"error": "No profile image"}), 404
 
-        image_path = os.path.join(UPLOAD_DIR, user.profile_image)
-        if not os.path.exists(image_path):
+        try:
+            data = download_file(user.profile_image)
+            return Response(data, mimetype="image/jpeg")
+        except Exception:
             return jsonify({"error": "Image file not found"}), 404
-
-        return send_file(image_path, mimetype="image/jpeg")
     finally:
         db.close()
 
@@ -1772,10 +1753,11 @@ def get_traveler_image(email):
         user = db.query(User).filter(User.email == email.lower().strip()).first()
         if not user or not user.profile_image:
             return jsonify({"error": "No profile image"}), 404
-        image_path = os.path.join(UPLOAD_DIR, user.profile_image)
-        if not os.path.exists(image_path):
+        try:
+            data = download_file(user.profile_image)
+            return Response(data, mimetype="image/jpeg")
+        except Exception:
             return jsonify({"error": "Image file not found"}), 404
-        return send_file(image_path, mimetype="image/jpeg")
     finally:
         db.close()
 
@@ -2035,11 +2017,8 @@ def delete_trip(trip_id):
         # Delete all alerts and receipts for this trip
         db.query(Alert).filter(Alert.trip_id == trip_id).delete()
         receipts = db.query(Receipt).filter(Receipt.trip_id == trip_id).all()
+        delete_files([r.image_url for r in receipts if r.image_url])
         for receipt in receipts:
-            if receipt.image_url:
-                image_path = os.path.join(UPLOAD_DIR, receipt.image_url)
-                if os.path.exists(image_path):
-                    os.remove(image_path)
             db.delete(receipt)
 
         # Archive the Notion page if linked
@@ -2260,11 +2239,9 @@ def delete_receipt(receipt_id):
                     except Exception as notion_err:
                         logging.error(f"Notion update on delete failed: {notion_err}")
 
-        # Delete image file
+        # Delete image file from Supabase Storage
         if receipt.image_url:
-            image_path = os.path.join(UPLOAD_DIR, receipt.image_url)
-            if os.path.exists(image_path):
-                os.remove(image_path)
+            delete_file(receipt.image_url)
 
         # Notify admins
         if g.user_role != "admin":
