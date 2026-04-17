@@ -13,8 +13,6 @@ from flask_cors import CORS
 import google.generativeai as genai
 import google.api_core.exceptions
 
-from rag.ingest import load_index, build_index, FAISS_INDEX_PATH
-from rag.chat import ask as rag_ask 
 
 from models import SessionLocal, User, Trip, Receipt, OtpCode, Alert, PendingReview, init_db, engine
 from notion_service import NotionService
@@ -2499,51 +2497,6 @@ def search_users():
     finally:
         db.close()
 
-
-# =============================================================================
-# RAG CHAT
-# =============================================================================
-
-_vectorstore = None
-
-def _get_vectorstore():
-    global _vectorstore
-    if _vectorstore is None:
-        if os.path.exists(FAISS_INDEX_PATH):
-            _vectorstore = load_index()
-        else:
-            _vectorstore = build_index()
-    return _vectorstore
-
-
-@app.route('/chat', methods=['POST'])
-@require_auth
-def chat_endpoint():
-    data = request.get_json()
-    question = data.get('question', '').strip()
-    if not question:
-        return jsonify({"error": "No question provided"}), 400
-
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter_by(email=g.user_email).first()
-        trips = db.query(Trip).filter_by(traveler_email=g.user_email).all()
-        trip_data = [t.to_dict() for t in trips]
-
-        vs = _get_vectorstore()
-        answer = rag_ask(
-            question=question,
-            vectorstore=vs,
-            user_name=user.name.split(' ')[0] if user else None,
-            trip_data=trip_data,
-        )
-
-        return jsonify({"answer": answer})
-    except Exception as e:
-        logging.error(f"Chat error: {e}")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        db.close()
 
 
 # =============================================================================
