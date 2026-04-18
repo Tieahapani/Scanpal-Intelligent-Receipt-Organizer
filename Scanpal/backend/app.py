@@ -585,7 +585,7 @@ def change_password():
     if errors:
         return jsonify({"error": f"New password must include: {', '.join(errors)}"}), 400
 
-    email = request.user_email
+    email = g.user_email
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()
@@ -616,7 +616,7 @@ def change_password():
 @require_auth
 def delete_account():
     """Delete the authenticated user's account from the database. Notion data is preserved."""
-    email = request.user_email
+    email = g.user_email
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()
@@ -626,6 +626,12 @@ def delete_account():
         # Delete user's OTP codes
         db.query(OtpCode).filter(OtpCode.email == email).delete()
 
+        # Delete user's alerts
+        db.query(Alert).filter(Alert.user_email == email).delete()
+
+        # Delete pending reviews related to this user
+        db.query(PendingReview).filter(PendingReview.traveler_email == email).delete()
+
         # Delete user's receipts and their image files
         receipts = db.query(Receipt).filter(Receipt.user_id == user.id).all()
         images_to_delete = [r.image_url for r in receipts if r.image_url]
@@ -634,6 +640,9 @@ def delete_account():
         delete_files(images_to_delete)
         for receipt in receipts:
             db.delete(receipt)
+
+        # Delete user's trips
+        db.query(Trip).filter(Trip.traveler_email == email).delete()
 
         # Delete the user
         db.delete(user)
