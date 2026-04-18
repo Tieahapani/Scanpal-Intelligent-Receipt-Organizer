@@ -60,8 +60,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
             children: [
               Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
               SizedBox(width: 10),
-              Text('Password reset successfully. Please log in.',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+              Flexible(
+                child: Text('Password reset successfully. Please log in.',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+              ),
             ],
           ),
         ),

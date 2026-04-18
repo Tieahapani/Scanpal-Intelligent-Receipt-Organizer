@@ -1927,7 +1927,9 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
               children: [
                 Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
                 SizedBox(width: 10),
-                Text('Receipt deleted successfully', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                Flexible(
+                  child: Text('Receipt deleted successfully', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                ),
               ],
             ),
           ),

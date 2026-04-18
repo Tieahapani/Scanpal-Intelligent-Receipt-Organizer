@@ -163,8 +163,10 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
                 SizedBox(width: 10),
-                Text('Account deleted successfully',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                Flexible(
+                  child: Text('Account deleted successfully',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                ),
               ],
             ),
           ),

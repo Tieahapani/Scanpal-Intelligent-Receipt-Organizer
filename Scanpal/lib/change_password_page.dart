@@ -64,8 +64,10 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
             children: [
               Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
               SizedBox(width: 10),
-              Text('Password changed successfully',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+              Flexible(
+                child: Text('Password changed successfully',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+              ),
             ],
           ),
         ),

@@ -17,6 +17,7 @@ class RegisterPage extends StatefulWidget {
 class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
+  late final TextEditingController _emailCtrl;
   final _passwordCtrl = TextEditingController();
   final _confirmPasswordCtrl = TextEditingController();
 
@@ -37,6 +38,7 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   void initState() {
     super.initState();
+    _emailCtrl = TextEditingController(text: widget.email);
     _fetchDepartments();
   }
 
@@ -55,6 +57,7 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _emailCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmPasswordCtrl.dispose();
     super.dispose();
@@ -66,6 +69,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
   bool get _isFormValid =>
       _nameCtrl.text.trim().isNotEmpty &&
+      _emailCtrl.text.trim().isNotEmpty &&
+      _emailCtrl.text.trim().contains('@') &&
       _selectedDepartment != null &&
       _passwordCtrl.text.isNotEmpty &&
       _confirmPasswordCtrl.text.isNotEmpty &&
@@ -83,7 +88,7 @@ class _RegisterPageState extends State<RegisterPage> {
     try {
       final api = APIService();
       final result = await api.login(
-        widget.email,
+        _emailCtrl.text.trim(),
         rememberMe: widget.rememberMe,
         password: _passwordCtrl.text,
         name: _nameCtrl.text.trim(),
@@ -99,7 +104,7 @@ class _RegisterPageState extends State<RegisterPage> {
           context,
           MaterialPageRoute(
             builder: (_) => OtpVerifyPage(
-              email: widget.email,
+              email: _emailCtrl.text.trim(),
               purpose: result.purpose,
               rememberMe: widget.rememberMe,
             ),
@@ -247,17 +252,24 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                       const SizedBox(height: 14),
 
-                      // ASI Email (read-only, pre-filled)
+                      // ASI Email
                       _buildLabel('ASI EMAIL ID'),
                       const SizedBox(height: 6),
                       TextFormField(
-                        initialValue: widget.email,
-                        readOnly: true,
+                        controller: _emailCtrl,
+                        keyboardType: TextInputType.emailAddress,
+                        autocorrect: false,
+                        onChanged: (_) => setState(() {}),
                         style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
                         decoration: _inputDecoration(
                           hint: 'your.name@asi.sfsu.edu',
                           prefixIcon: Icons.mail_outline_rounded,
                         ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Enter your ASI email';
+                          if (!v.contains('@')) return 'Enter a valid email';
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 14),
 
