@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend Checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Scanpal/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check for syntax errors
+        run: python -m py_compile app.py auth.py models.py storage.py email_utils.py notion_service.py azure_ocr.py unsplash.py
+
+  flutter:
+    name: Flutter Checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Scanpal
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze code
+        run: flutter analyze --no-fatal-infos
