@@ -623,16 +623,24 @@ def delete_account():
         if not user:
             return jsonify({"error": "User not found"}), 404
 
-        # Delete user's OTP codes
+        # Collect user's own trip IDs (primary traveler)
+        own_trips = db.query(Trip).filter(Trip.traveler_email == email).all()
+        own_trip_ids = [t.id for t in own_trips]
+
+        # Delete OTP codes
         db.query(OtpCode).filter(OtpCode.email == email).delete()
 
-        # Delete user's alerts
-        db.query(Alert).filter(Alert.user_email == email).delete()
+        # Delete alerts: user's own + any referencing user's trips
+        db.query(Alert).filter(Alert.user_email == email).delete(synchronize_session=False)
+        if own_trip_ids:
+            db.query(Alert).filter(Alert.trip_id.in_(own_trip_ids)).delete(synchronize_session=False)
 
-        # Delete pending reviews related to this user
-        db.query(PendingReview).filter(PendingReview.traveler_email == email).delete()
+        # Delete pending reviews: user's own + any referencing user's trips
+        db.query(PendingReview).filter(PendingReview.traveler_email == email).delete(synchronize_session=False)
+        if own_trip_ids:
+            db.query(PendingReview).filter(PendingReview.trip_id.in_(own_trip_ids)).delete(synchronize_session=False)
 
-        # Delete user's receipts and their image files
+        # Delete receipts and their images
         receipts = db.query(Receipt).filter(Receipt.user_id == user.id).all()
         images_to_delete = [r.image_url for r in receipts if r.image_url]
         if user.profile_image:
@@ -641,8 +649,18 @@ def delete_account():
         for receipt in receipts:
             db.delete(receipt)
 
-        # Delete user's trips
-        db.query(Trip).filter(Trip.traveler_email == email).delete()
+        # Delete user's own trips (safe now — no FKs point to them)
+        if own_trip_ids:
+            db.query(Trip).filter(Trip.id.in_(own_trip_ids)).delete(synchronize_session=False)
+
+        # Remove user from co-traveler lists on other people's trips
+        co_trips = db.query(Trip).filter(
+            Trip.travelers.isnot(None),
+            Trip.travelers.contains(email),
+        ).all()
+        for trip in co_trips:
+            emails = [e.strip() for e in trip.travelers.split(",") if e.strip() and e.strip() != email]
+            trip.travelers = ", ".join(emails) if emails else None
 
         # Delete the user
         db.delete(user)
