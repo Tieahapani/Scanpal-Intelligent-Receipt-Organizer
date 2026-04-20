@@ -21,7 +21,7 @@ def upload_file(filename: str, data: bytes, content_type: str = "application/oct
     headers = _headers()
     headers["Content-Type"] = content_type
     headers["x-upsert"] = "true"
-    resp = requests.post(url, headers=headers, data=data)
+    resp = requests.put(url, headers=headers, data=data)
     resp.raise_for_status()
     return get_public_url(filename)
 

@@ -1355,7 +1355,7 @@ Return ONLY valid JSON in this EXACT format (no markdown, no extra text):
         # Save receipt image to Supabase Storage
         receipt_id = str(uuid.uuid4())
         image_filename = f"{receipt_id}.jpg"
-        upload_file(image_filename, img)
+        upload_file(image_filename, img, content_type="image/jpeg")
 
         # Save to PostgreSQL
         db = SessionLocal()
@@ -1557,7 +1557,7 @@ def attach_receipt_image(receipt_id):
 
         # Save image file to Supabase Storage
         filename = f"{uuid.uuid4()}.jpg"
-        upload_file(filename, img)
+        upload_file(filename, img, content_type="image/jpeg")
 
         # Update the placeholder receipt with the image
         receipt.image_url = filename
@@ -1710,7 +1710,8 @@ def upload_profile_image():
         # Save new image to Supabase Storage
         ext = os.path.splitext(file.filename)[1] or ".jpg"
         filename = f"profile_{user.id}{ext}"
-        upload_file(filename, file.read())
+        content_type = file.content_type or "image/jpeg"
+        upload_file(filename, file.read(), content_type=content_type)
 
         user.profile_image = filename
         db.commit()
