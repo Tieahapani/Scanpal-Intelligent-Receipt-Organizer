@@ -2285,17 +2285,19 @@ def delete_receipt(receipt_id):
             user = db.query(User).filter(User.email == g.user_email).first()
             traveler_name = user.name if user else g.user_email
             merchant = receipt.merchant or "a receipt"
+            # Only pass trip_id if the trip actually exists in DB
+            valid_trip_id = receipt.trip_id if receipt.trip_id and db.query(Trip).filter(Trip.id == receipt.trip_id).first() else None
             _notify_admins(
                 db, g.user_email,
                 title=f"{traveler_name} deleted a receipt from {merchant}",
                 message=f"{traveler_name} deleted a receipt from {merchant}.",
-                trip_id=receipt.trip_id,
+                trip_id=valid_trip_id,
             )
             _create_pending_review(
                 db, g.user_email, traveler_name,
                 title=f"{traveler_name} deleted a receipt from {merchant}",
                 review_type="receipt", action="deleted",
-                trip_id=receipt.trip_id,
+                trip_id=valid_trip_id,
             )
 
         db.delete(receipt)
