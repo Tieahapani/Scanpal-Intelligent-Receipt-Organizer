@@ -266,61 +266,6 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
                     const SizedBox(height: 32),
 
                     // Code input boxes
-<<<<<<< Updated upstream
-                    Row(
-                      children: List.generate(6, (index) {
-                        final hasValue = _digitControllers[index].text.isNotEmpty;
-                        return Expanded(
-                          child: Container(
-                            height: 56,
-                            margin: EdgeInsets.only(right: index < 5 ? 8 : 0),
-                            child: KeyboardListener(
-                              focusNode: FocusNode(),
-                              onKeyEvent: (event) => _onKeyDown(index, event),
-                              child: TextField(
-                                controller: _digitControllers[index],
-                                focusNode: _focusNodes[index],
-                                keyboardType: TextInputType.number,
-                                textAlign: TextAlign.center,
-                                maxLength: 6,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                  color: hasValue ? const Color(0xFF46166B) : const Color(0xFF111827),
-                                ),
-                                decoration: InputDecoration(
-                                  counterText: '',
-                                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                                  filled: true,
-                                  fillColor: hasValue ? Colors.white : const Color(0xFFF9FAFB),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                      color: hasValue ? const Color(0xFF46166B) : const Color(0xFFE5E7EB),
-                                      width: 2,
-                                    ),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                      color: hasValue ? const Color(0xFF46166B) : const Color(0xFFE5E7EB),
-                                      width: 2,
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                      color: hasValue ? const Color(0xFF46166B) : const Color(0xFFE8A824),
-                                      width: 2,
-                                    ),
-                                  ),
-                                ),
-                                onChanged: (value) => _onDigitChanged(index, value),
-                              ),
-                            ),
-                          ),
-=======
                     LayoutBuilder(
                       builder: (context, constraints) {
                         final boxSize = ((constraints.maxWidth - 5 * 8) / 6).clamp(40.0, 52.0);
@@ -379,7 +324,6 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
                               ),
                             );
                           }),
->>>>>>> Stashed changes
                         );
                       },
                     ),
