@@ -770,28 +770,6 @@ class _AddTripPageState extends State<AddTripPage> {
                                     ),
                                   ),
                                 ),
-                                if (dept.code.isNotEmpty)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? const Color(0xFF46166B)
-                                              .withValues(alpha: 0.1)
-                                          : Colors.grey.shade100,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      dept.code,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: isSelected
-                                            ? const Color(0xFF46166B)
-                                            : const Color(0xFF6B7280),
-                                      ),
-                                    ),
-                                  ),
                                 if (isSelected) ...[
                                   const SizedBox(width: 8),
                                   const Icon(Icons.check,
@@ -831,7 +809,7 @@ class _AddTripPageState extends State<AddTripPage> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                _selectedDepartment?.display ?? 'Select department',
+                _selectedDepartment?.name ?? 'Select department',
                 style: TextStyle(
                   fontSize: 15,
                   color: _selectedDepartment != null

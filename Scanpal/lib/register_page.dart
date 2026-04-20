@@ -609,7 +609,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    _selectedDepartment?.display ?? 'Select your department',
+                    _selectedDepartment?.name ?? 'Select your department',
                     style: TextStyle(
                       fontSize: 14,
                       color: _selectedDepartment != null
@@ -669,15 +669,8 @@ class _RegisterPageState extends State<RegisterPage> {
                               ),
                             ),
                           ),
-                          if (dept.code.isNotEmpty)
-                            Text(
-                              dept.code,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: isSelected ? _purple : const Color(0xFF9CA3AF),
-                              ),
-                            ),
+                          if (isSelected)
+                            const Icon(Icons.check, size: 16, color: Color(0xFF46166B)),
                         ],
                       ),
                     ),
