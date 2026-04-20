@@ -1843,120 +1843,6 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
   }
 
 
-  Future<bool> _confirmDeleteReceipt(Receipt receipt) async {
-    final confirmed = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 56, height: 56,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF46166B).withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.delete_outline, color: Color(0xFF46166B), size: 28),
-              ),
-              const SizedBox(height: 16),
-              const Text('Delete Receipt?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
-              const SizedBox(height: 8),
-              Text(
-                'Are you sure you want to delete "${receipt.merchant ?? 'this receipt'}"? This action cannot be undone.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade500, height: 1.4),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(ctx, false),
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text('Cancel', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(ctx, true),
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [Color(0xFF46166B), Color(0xFF7B3FA0)]),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text('Delete', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (confirmed != true) return false;
-    try {
-      await _api.deleteReceipt(receipt.id);
-      _loadData(silent: true);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFF46166B),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
-                SizedBox(width: 10),
-                Flexible(
-                  child: Text('Receipt deleted successfully', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-      return true;
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red.shade600,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 10),
-                Expanded(child: Text('Failed to delete: $e', style: const TextStyle(color: Colors.white))),
-              ],
-            ),
-          ),
-        );
-      }
-      return false;
-    }
-  }
-
   static const _mealTypeColors = {
     'breakfast': Color(0xFFF59E0B),
     'lunch': Color(0xFF3B82F6),
@@ -1999,21 +1885,7 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
         ? DateFormat('MMM d, y').format(receipt.date!)
         : '';
 
-    return Dismissible(
-      key: Key(receipt.id),
-      direction: DismissDirection.endToStart,
-      confirmDismiss: (_) => _confirmDeleteReceipt(receipt),
-      background: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFF46166B),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 24),
-        child: const Icon(Icons.delete_outline, color: Colors.white, size: 24),
-      ),
-      child: GestureDetector(
+    return GestureDetector(
       onTap: () async {
           await Navigator.push(
             context,
@@ -2136,7 +2008,6 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
           ],
         ),
       ),
-    ),
     );
   }
 

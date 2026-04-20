@@ -672,11 +672,12 @@ class APIService {
       final uri = Uri.parse('$baseUrl/receipts/$receiptId');
       final headers = await _authHeaders();
       final res = await http.delete(uri, headers: headers).timeout(_timeout);
-      debugPrint('DELETE /receipts/$receiptId ${res.statusCode}');
-      return res.statusCode == 200;
+      debugPrint('DELETE /receipts/$receiptId ${res.statusCode} ${res.body}');
+      if (res.statusCode == 200) return true;
+      throw Exception(res.body);
     } catch (e) {
       debugPrint('Failed to delete receipt: $e');
-      return false;
+      rethrow;
     }
   }
 

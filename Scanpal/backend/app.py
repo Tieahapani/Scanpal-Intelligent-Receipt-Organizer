@@ -2303,6 +2303,7 @@ def delete_receipt(receipt_id):
         return jsonify({"status": "deleted"}), 200
     except Exception as e:
         db.rollback()
+        logging.error(f"Delete receipt error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
     finally:
         db.close()
