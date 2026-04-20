@@ -5,6 +5,7 @@ import uuid
 import secrets
 import bcrypt
 import threading
+import time
 from datetime import datetime, timezone, timedelta
 
 from flask import Flask, request, jsonify, g, Response
@@ -1312,15 +1313,25 @@ Return ONLY valid JSON in this EXACT format (no markdown, no extra text):
 """
 
         model = genai.GenerativeModel("gemini-2.0-flash")
-        try:
-            response = model.generate_content(prompt)
-            logging.info("Gemini call SUCCESS")
-        except google.api_core.exceptions.ResourceExhausted as quota_err:
-            logging.error(f"GEMINI QUOTA 429: {quota_err}")
-            return jsonify({"error": f"Gemini quota exceeded: {str(quota_err)[:300]}"}), 429
-        except Exception as gemini_err:
-            logging.error(f"GEMINI ERROR: {gemini_err}")
-            raise
+        response = None
+        for attempt in range(3):
+            try:
+                response = model.generate_content(prompt)
+                logging.info("Gemini call SUCCESS")
+                break
+            except google.api_core.exceptions.ResourceExhausted:
+                if attempt < 2:
+                    wait = 2 ** attempt  # 1s, 2s
+                    logging.warning(f"Gemini 429, retrying in {wait}s (attempt {attempt + 1}/3)")
+                    time.sleep(wait)
+                else:
+                    logging.error("Gemini quota exhausted after 3 attempts")
+                    return jsonify({"error": "AI service is busy. Please try again in a moment."}), 429
+            except Exception as gemini_err:
+                logging.error(f"GEMINI ERROR: {gemini_err}")
+                raise
+        if response is None:
+            return jsonify({"error": "AI service unavailable"}), 503
 
         text = response.text.strip()
 
@@ -2325,13 +2336,26 @@ def report_summary():
 
     try:
         model = genai.GenerativeModel("gemini-2.0-flash")
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.4,
-                max_output_tokens=500,
-            ),
-        )
+        response = None
+        for attempt in range(3):
+            try:
+                response = model.generate_content(
+                    prompt,
+                    generation_config=genai.types.GenerationConfig(
+                        temperature=0.4,
+                        max_output_tokens=500,
+                    ),
+                )
+                break
+            except google.api_core.exceptions.ResourceExhausted:
+                if attempt < 2:
+                    wait = 2 ** attempt
+                    logging.warning(f"Gemini report 429, retrying in {wait}s (attempt {attempt + 1}/3)")
+                    time.sleep(wait)
+                else:
+                    return jsonify({"error": "AI service is busy. Please try again in a moment."}), 429
+        if response is None:
+            return jsonify({"error": "AI service unavailable"}), 503
         return jsonify({"summary": response.text.strip()}), 200
     except Exception as e:
         logging.error(f"Gemini report summary error: {e}")
