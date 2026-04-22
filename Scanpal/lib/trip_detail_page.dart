@@ -1,14 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'models/trip.dart';
 import 'receipt.dart';
 import 'api.dart';
 import 'auth_service.dart';
-import 'receipt_detail_page.dart';
 import 'travel_calendar.dart';
 import 'receipt_detail_view_page.dart';
 
@@ -28,7 +25,6 @@ class _TripDetailPageState extends State<TripDetailPage> {
   bool _loading = true;
   bool _isAdmin = false;
   final _commentCtrl = TextEditingController();
-  bool _sendingComment = false;
 
   static const _thumbGradients = [
     [Color(0xFF1E3A5F), Color(0xFF4A7FB5)],
@@ -77,7 +73,6 @@ class _TripDetailPageState extends State<TripDetailPage> {
   Future<void> _sendComment() async {
     final text = _commentCtrl.text.trim();
     if (text.isEmpty) return;
-    setState(() => _sendingComment = true);
     try {
       await _api.addTripComment(_trip.id, text);
       _commentCtrl.clear();
@@ -88,8 +83,6 @@ class _TripDetailPageState extends State<TripDetailPage> {
       if (mounted) {
         _showToast('Failed to send comment: $e', isError: true);
       }
-    } finally {
-      if (mounted) setState(() => _sendingComment = false);
     }
   }
 
@@ -1393,19 +1386,6 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
   final _api = APIService();
   String? _token;
 
-  void _showToast(String message, {bool isError = false}) {
-    final overlay = Overlay.of(context);
-    late OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (_) => _TopToast(
-        message: message,
-        isError: isError,
-        onDismiss: () => entry.remove(),
-      ),
-    );
-    overlay.insert(entry);
-  }
-
   @override
   void initState() {
     super.initState();
@@ -1415,109 +1395,6 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
   Future<void> _loadToken() async {
     final token = await AuthService.instance.getToken();
     if (mounted) setState(() => _token = token);
-  }
-
-  void _attachReceiptToPlaceholder(Receipt receipt) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Icon(Icons.admin_panel_settings, size: 40, color: const Color(0xFFE8A824)),
-              const SizedBox(height: 12),
-              Text(
-                '${receipt.merchant ?? "Expense"} — ${_currency.format(receipt.effectiveTotal)}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Added by your admin. You can attach your receipt.',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _scanForPlaceholder(receipt);
-                      },
-                      icon: const Icon(Icons.camera_alt),
-                      label: const Text('Scan'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1F2937),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _pickFromGalleryForPlaceholder(receipt);
-                      },
-                      icon: const Icon(Icons.photo_library),
-                      label: const Text('Gallery'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF1F2937),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _scanForPlaceholder(Receipt receipt) async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.camera);
-    if (picked == null) return;
-    await _attachImageToReceipt(receipt, File(picked.path));
-  }
-
-  Future<void> _pickFromGalleryForPlaceholder(Receipt receipt) async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked == null) return;
-    await _attachImageToReceipt(receipt, File(picked.path));
-  }
-
-  Future<void> _attachImageToReceipt(Receipt receipt, File image) async {
-    try {
-      await _api.attachReceiptImage(image, receiptId: receipt.id);
-      if (mounted) {
-        _showToast('Receipt attached successfully');
-        widget.onRefresh?.call();
-      }
-    } catch (e) {
-      if (mounted) {
-        _showToast('Failed to attach: $e', isError: true);
-      }
-    }
   }
 
   List<Receipt> get receipts => widget.receipts;

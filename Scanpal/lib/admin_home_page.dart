@@ -538,7 +538,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
     final title = trip.displayTitle.toLowerCase();
     final dest = (trip.destination ?? '').toLowerCase();
-    final traveler = (trip.travelerName ?? trip.travelerEmail).toLowerCase();
+    final traveler = trip.travelerName.toLowerCase();
 
     int best = 0;
 
@@ -709,7 +709,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                                               ),
                                               const SizedBox(height: 2),
                                               Text(
-                                                trip.travelerName ?? trip.travelerEmail,
+                                                trip.travelerName,
                                                 style: TextStyle(
                                                   fontSize: 11,
                                                   color: Colors.grey.shade500,

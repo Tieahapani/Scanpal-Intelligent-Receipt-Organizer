@@ -20,7 +20,7 @@ class _AddTripPageState extends State<AddTripPage> {
   final _descCtrl = TextEditingController();
   final _travelerSearchCtrl = TextEditingController();
   final _travelerSearchFocus = FocusNode();
-  List<Map<String, dynamic>> _selectedTravelers = []; // [{name, email, department}]
+  final List<Map<String, dynamic>> _selectedTravelers = []; // [{name, email, department}]
   List<Map<String, dynamic>> _travelerSuggestions = [];
   Timer? _searchDebounce;
   bool _showSuggestions = false;

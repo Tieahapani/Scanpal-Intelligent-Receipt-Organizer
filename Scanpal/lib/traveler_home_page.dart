@@ -191,42 +191,6 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
     );
   }
 
-  double get _currentMonthSpending {
-    final now = DateTime.now();
-    double total = 0;
-    for (final t in _trips) {
-      final d = t.departureDate;
-      if (d != null && d.month == now.month && d.year == now.year) {
-        total += t.totalExpenses;
-      }
-    }
-    return total;
-  }
-
-  double get _previousMonthSpending {
-    final now = DateTime.now();
-    final prev = DateTime(now.year, now.month - 1);
-    double total = 0;
-    for (final t in _trips) {
-      final d = t.departureDate;
-      if (d != null && d.month == prev.month && d.year == prev.year) {
-        total += t.totalExpenses;
-      }
-    }
-    return total;
-  }
-
-  double? get _monthOverMonthChange {
-    final current = _currentMonthSpending;
-    final prev = _previousMonthSpending;
-    if (prev == 0 || current == 0) return null;
-    return ((current - prev) / prev) * 100;
-  }
-
-  String get _currentMonthLabel {
-    return DateFormat('MMMM yyyy').format(DateTime.now());
-  }
-
   int get _alertCount => _backendAlertCount;
 
   Future<void> _handleScan(ImageSource source) async {
@@ -1158,7 +1122,10 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
             _dropdownItem(Icons.person_outline, 'My Profile', onTap: () async {
               setState(() => _dropdownOpen = false);
               await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
-              if (mounted) setState(() => _avatarVersion++);
+              if (mounted) {
+                await CachedNetworkImage.evictFromCache('${_api.profileImageUrl()}?v=$_avatarVersion');
+                setState(() => _avatarVersion++);
+              }
             }),
             _dropdownItem(Icons.settings_outlined, 'Settings', onTap: () {
               setState(() => _dropdownOpen = false);

@@ -2483,7 +2483,6 @@ def admin_travelers():
         today = datetime.utcnow().date()
         users = db.query(User).filter(User.role == "traveler").all()
         result = []
-        from sqlalchemy import or_ as db_or
         for user in users:
             all_user_trips = db.query(Trip).filter(
                 db_or(

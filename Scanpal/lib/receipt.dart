@@ -23,7 +23,7 @@ class LineItem {
   });
 
   factory LineItem.fromMap(Map<String, dynamic> m) {
-    double? _numOrNull(dynamic v) {
+    double? numOrNull(dynamic v) {
       if (v == null) return null;
       if (v is num) return v.toDouble();
       return double.tryParse(v.toString());
@@ -31,9 +31,9 @@ class LineItem {
 
     return LineItem(
       name: (m['name'] ?? 'Item').toString(),
-      quantity: _numOrNull(m['quantity']),
-      unitPrice: _numOrNull(m['unit_price'] ?? m['price']),
-      total: _numOrNull(m['total']),
+      quantity: numOrNull(m['quantity']),
+      unitPrice: numOrNull(m['unit_price'] ?? m['price']),
+      total: numOrNull(m['total']),
     );
   }
 
@@ -121,7 +121,7 @@ class Receipt {
   });
 
   factory Receipt.fromMap(Map<String, dynamic> m) {
-    double? _numOrNull(dynamic v) {
+    double? numOrNull(dynamic v) {
       if (v == null) return null;
       if (v is num) return v.toDouble();
       return double.tryParse(v.toString());
@@ -159,10 +159,10 @@ class Receipt {
       merchant: _titleCase(m['merchant']?.toString()),
       date: parsedDate,
       address: m['address']?.toString(),
-      subtotal: _numOrNull(m['subtotal']),
-      tax: _numOrNull(m['tax']),
-      tip: _numOrNull(m['tip']),
-      total: _numOrNull(m['total']) ?? 0.0,
+      subtotal: numOrNull(m['subtotal']),
+      tax: numOrNull(m['tax']),
+      tip: numOrNull(m['tip']),
+      total: numOrNull(m['total']) ?? 0.0,
       items: items,
       provider: m['provider']?.toString(),
       confidences: conf,

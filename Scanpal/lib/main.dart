@@ -12,13 +12,6 @@ void main() async {
   final token = await auth.getToken();
   final user = await auth.getUser();
 
-  debugPrint('=== SESSION CHECK ===');
-  debugPrint('Token present: ${token != null}');
-  debugPrint('Token value: ${token?.substring(0, 10)}...');
-  debugPrint('User present: ${user != null}');
-  debugPrint('User email: ${user?.email}');
-  debugPrint('=== END SESSION CHECK ===');
-
   runApp(MyApp(
     isLoggedIn: token != null && user != null,
     user: user,
