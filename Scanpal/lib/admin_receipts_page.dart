@@ -411,12 +411,8 @@ class _AdminReceiptsPageState extends State<AdminReceiptsPage> {
     return _tripMap[r.tripId]?.department;
   }
 
-  /// Returns "Name (Code)" for display, or just name if no code found.
+  /// Returns the department name for display.
   String _deptDisplay(String deptName) {
-    final match = _departments.where((d) => d.name == deptName);
-    if (match.isNotEmpty && match.first.code.isNotEmpty) {
-      return '${match.first.name} (${match.first.code})';
-    }
     return deptName;
   }
 
@@ -841,7 +837,7 @@ class _AdminReceiptsPageState extends State<AdminReceiptsPage> {
           border: selected ? null : Border.all(color: const Color(0xFFE5E7EB)),
         ),
         child: Text(
-          code.isNotEmpty ? '$label ($code)' : label,
+          label,
           style: TextStyle(
             fontSize: 11,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w500,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'services/analytics_service.dart';
-import 'services/report_service.dart';
 import 'models/trip.dart';
 
 enum TimePeriod { weekly, monthly, yearly }
@@ -114,8 +113,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   }
 
   AnalyticsService? get _analytics => widget.analyticsService;
-  bool _downloading = false;
-
   (DateTime, DateTime) get _dateRange {
     switch (_activeTab) {
       case TimePeriod.monthly:
@@ -130,45 +127,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         final ws = w[_safeWeekIndex]['start'] as DateTime;
         final start = DateTime(ws.year, ws.month, ws.day);
         return (start, start.add(const Duration(days: 7)));
-    }
-  }
-
-  Future<void> _downloadReport() async {
-    if (_downloading || _analytics == null) return;
-    setState(() => _downloading = true);
-    try {
-      final data = _data;
-      final periodType = switch (_activeTab) {
-        TimePeriod.monthly => 'Monthly',
-        TimePeriod.weekly => 'Weekly',
-        TimePeriod.yearly => 'Yearly',
-      };
-      final (start, end) = _dateRange;
-      final periodReceipts = _analytics!.receipts.where((r) {
-        if (r.date == null) return false;
-        final d = DateTime(r.date!.year, r.date!.month, r.date!.day);
-        return !d.isBefore(start) && d.isBefore(end);
-      }).toList();
-      final periodTrips = _analytics!.trips.where((t) {
-        if (t.departureDate == null) return false;
-        final depDay = DateTime(t.departureDate!.year, t.departureDate!.month, t.departureDate!.day);
-        final retDay = t.returnDate != null
-            ? DateTime(t.returnDate!.year, t.returnDate!.month, t.returnDate!.day)
-            : depDay;
-        return depDay.isBefore(end) && !retDay.isBefore(start);
-      }).toList();
-
-      await ReportService.generateAndShare(
-        data: data,
-        receipts: periodReceipts,
-        trips: periodTrips,
-        periodLabel: _label,
-        periodType: periodType,
-      );
-    } catch (e) {
-      debugPrint('Report error: $e');
-    } finally {
-      if (mounted) setState(() => _downloading = false);
     }
   }
 
@@ -511,23 +469,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.w400, color: Color(0xFF9CA3AF)),
                     ),
                   ],
-                ),
-              ),
-              GestureDetector(
-                onTap: _downloadReport,
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF46166B).withValues(alpha: 0.08),
-                    shape: BoxShape.circle,
-                  ),
-                  child: _downloading
-                      ? const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF46166B)),
-                        )
-                      : const Icon(Icons.download_rounded, size: 16, color: Color(0xFF46166B)),
                 ),
               ),
             ],
@@ -1082,8 +1023,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
     if (catEntries.isEmpty) return const SizedBox.shrink();
 
-    final maxCatValue = catEntries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
-
     return Padding(
       padding: const EdgeInsets.only(left: 30, right: 12, bottom: 8, top: 4),
       child: Container(
@@ -1096,7 +1035,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             final catColor = _categoryColors[entry.key] ?? const Color(0xFFB08D3A);
             final catLabel = _categoryLabels[entry.key] ?? entry.key;
             final catPct = dept.amount > 0 ? (entry.value / dept.amount * 100).round() : 0;
-            final barFraction = maxCatValue > 0 ? entry.value / maxCatValue : 0.0;
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),

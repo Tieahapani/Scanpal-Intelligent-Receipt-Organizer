@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'api.dart';
 import 'services/monthly_summary_service.dart';
 import 'widgets/summary_cards.dart';
-import 'expense_report_page.dart';
 
 class MonthlySummaryPage extends StatefulWidget {
   final String? tripId;
@@ -70,26 +69,6 @@ class _MonthlySummaryPageState extends State<MonthlySummaryPage> {
     }
   }
 
-  void _openReport() {
-    if (_service == null) return;
-    final stats = _service!.quickStats(_range);
-    final cats = _service!.categoryBreakdown(_range);
-    final vendors = _service!.vendorBreakdown(_range);
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ExpenseReportPage(
-          dateRange: _range,
-          stats: stats,
-          categoryBreakdown: cats,
-          vendorBreakdown: vendors,
-          currency: _currency,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('MMM d');
@@ -106,13 +85,6 @@ class _MonthlySummaryPageState extends State<MonthlySummaryPage> {
         foregroundColor: const Color(0xFF0F172A),
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_rounded),
-            tooltip: 'Generate Report',
-            onPressed: _service != null ? _openReport : null,
-          ),
-        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

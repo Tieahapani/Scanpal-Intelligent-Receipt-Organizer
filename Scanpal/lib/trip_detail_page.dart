@@ -1,14 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'models/trip.dart';
 import 'receipt.dart';
 import 'api.dart';
 import 'auth_service.dart';
-import 'receipt_detail_page.dart';
 import 'travel_calendar.dart';
 import 'receipt_detail_view_page.dart';
 
@@ -28,7 +25,6 @@ class _TripDetailPageState extends State<TripDetailPage> {
   bool _loading = true;
   bool _isAdmin = false;
   final _commentCtrl = TextEditingController();
-  bool _sendingComment = false;
 
   static const _thumbGradients = [
     [Color(0xFF1E3A5F), Color(0xFF4A7FB5)],
@@ -77,7 +73,6 @@ class _TripDetailPageState extends State<TripDetailPage> {
   Future<void> _sendComment() async {
     final text = _commentCtrl.text.trim();
     if (text.isEmpty) return;
-    setState(() => _sendingComment = true);
     try {
       await _api.addTripComment(_trip.id, text);
       _commentCtrl.clear();
@@ -88,8 +83,6 @@ class _TripDetailPageState extends State<TripDetailPage> {
       if (mounted) {
         _showToast('Failed to send comment: $e', isError: true);
       }
-    } finally {
-      if (mounted) setState(() => _sendingComment = false);
     }
   }
 
@@ -1393,19 +1386,6 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
   final _api = APIService();
   String? _token;
 
-  void _showToast(String message, {bool isError = false}) {
-    final overlay = Overlay.of(context);
-    late OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (_) => _TopToast(
-        message: message,
-        isError: isError,
-        onDismiss: () => entry.remove(),
-      ),
-    );
-    overlay.insert(entry);
-  }
-
   @override
   void initState() {
     super.initState();
@@ -1415,109 +1395,6 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
   Future<void> _loadToken() async {
     final token = await AuthService.instance.getToken();
     if (mounted) setState(() => _token = token);
-  }
-
-  void _attachReceiptToPlaceholder(Receipt receipt) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Icon(Icons.admin_panel_settings, size: 40, color: const Color(0xFFE8A824)),
-              const SizedBox(height: 12),
-              Text(
-                '${receipt.merchant ?? "Expense"} — ${_currency.format(receipt.effectiveTotal)}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Added by your admin. You can attach your receipt.',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _scanForPlaceholder(receipt);
-                      },
-                      icon: const Icon(Icons.camera_alt),
-                      label: const Text('Scan'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1F2937),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _pickFromGalleryForPlaceholder(receipt);
-                      },
-                      icon: const Icon(Icons.photo_library),
-                      label: const Text('Gallery'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF1F2937),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _scanForPlaceholder(Receipt receipt) async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.camera);
-    if (picked == null) return;
-    await _attachImageToReceipt(receipt, File(picked.path));
-  }
-
-  Future<void> _pickFromGalleryForPlaceholder(Receipt receipt) async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked == null) return;
-    await _attachImageToReceipt(receipt, File(picked.path));
-  }
-
-  Future<void> _attachImageToReceipt(Receipt receipt, File image) async {
-    try {
-      await _api.attachReceiptImage(image, receiptId: receipt.id);
-      if (mounted) {
-        _showToast('Receipt attached successfully');
-        widget.onRefresh?.call();
-      }
-    } catch (e) {
-      if (mounted) {
-        _showToast('Failed to attach: $e', isError: true);
-      }
-    }
   }
 
   List<Receipt> get receipts => widget.receipts;
@@ -1636,92 +1513,6 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
     );
   }
 
-  Future<bool> _confirmDeleteReceipt(Receipt receipt) async {
-    final confirmed = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 56, height: 56,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF46166B).withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.delete_outline, color: Color(0xFF46166B), size: 28),
-              ),
-              const SizedBox(height: 16),
-              const Text('Delete Receipt?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
-              const SizedBox(height: 8),
-              Text(
-                'Are you sure you want to delete "${receipt.merchant ?? 'this receipt'}"? This action cannot be undone.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade500, height: 1.4),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(ctx, false),
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text('Cancel', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(ctx, true),
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [Color(0xFF46166B), Color(0xFF7B3FA0)]),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text('Delete', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (confirmed != true) return false;
-    try {
-      await _api.deleteReceipt(receipt.id);
-      widget.onRefresh?.call();
-      if (mounted) {
-        _showToast('Receipt deleted');
-      }
-      return true;
-    } catch (e) {
-      if (mounted) {
-        _showToast('Failed to delete: $e', isError: true);
-      }
-      return false;
-    }
-  }
-
   static const _mealTypeColors = {
     'breakfast': Color(0xFFF59E0B),
     'lunch': Color(0xFF3B82F6),
@@ -1764,20 +1555,7 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
         : 'No date';
     final catLabel = _categoryLabel(receipt);
 
-    return Dismissible(
-      key: Key(receipt.id),
-      direction: DismissDirection.endToStart,
-      confirmDismiss: (_) => _confirmDeleteReceipt(receipt),
-      background: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF46166B),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 24),
-        child: const Icon(Icons.delete_outline, color: Colors.white, size: 24),
-      ),
-      child: GestureDetector(
+    return GestureDetector(
       onTap: () async {
           await Navigator.push(
             context,
@@ -1911,7 +1689,6 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
           ],
         ),
       ),
-    ),
     );
   }
 

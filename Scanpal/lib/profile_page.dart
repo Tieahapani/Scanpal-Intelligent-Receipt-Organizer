@@ -177,6 +177,7 @@ class _ProfilePageState extends State<ProfilePage> {
           final filename = await _api.uploadProfileImage(File(picked.path));
           await _updateUserProfileImage(filename);
           if (mounted) {
+            await CachedNetworkImage.evictFromCache('${_api.profileImageUrl()}?v=$_imageVersion');
             setState(() {
               _hasProfileImage = true;
               _imageVersion++;
