@@ -196,21 +196,21 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
       case 'No ODTA Submitted':
         return (dot: const Color(0xFF9CA3AF), text: const Color(0xFF6B7280), bg: const Color(0xFFF3F4F6));
       case 'TAAR Sent':
-        return (dot: const Color(0xFF60A5FA), text: const Color(0xFF2563EB), bg: const Color(0xFFEFF6FF));
+        return (dot: const Color(0xFFA855F7), text: const Color(0xFF7E22CE), bg: const Color(0xFFF3E8FF));
       case 'TAAR Reviewed':
-        return (dot: const Color(0xFFFBBF24), text: const Color(0xFFD97706), bg: const Color(0xFFFFFBEB));
+        return (dot: const Color(0xFFE8A824), text: const Color(0xFFB8860B), bg: const Color(0xFFFFF8E1));
       case 'TAAR Processed':
-        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+        return (dot: const Color(0xFF7B3FA0), text: const Color(0xFF46166B), bg: const Color(0xFFF0E6F6));
       case 'TC Sent':
-        return (dot: const Color(0xFF60A5FA), text: const Color(0xFF2563EB), bg: const Color(0xFFEFF6FF));
+        return (dot: const Color(0xFFA855F7), text: const Color(0xFF7E22CE), bg: const Color(0xFFF3E8FF));
       case 'TC Pending Review':
-        return (dot: const Color(0xFFFBBF24), text: const Color(0xFFD97706), bg: const Color(0xFFFFFBEB));
+        return (dot: const Color(0xFFE8A824), text: const Color(0xFFB8860B), bg: const Color(0xFFFFF8E1));
       case 'TC Correction Needed':
-        return (dot: const Color(0xFFF87171), text: const Color(0xFFDC2626), bg: const Color(0xFFFEF2F2));
+        return (dot: const Color(0xFFD97706), text: const Color(0xFF92400E), bg: const Color(0xFFFEF3C7));
       case 'TC Processed':
-        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+        return (dot: const Color(0xFF7B3FA0), text: const Color(0xFF46166B), bg: const Color(0xFFF0E6F6));
       case 'Approved':
-        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+        return (dot: const Color(0xFF46166B), text: const Color(0xFF46166B), bg: const Color(0xFFF0E6F6));
       default:
         return (dot: const Color(0xFFA78BFA), text: const Color(0xFF7C3AED), bg: const Color(0xFFF5F3FF));
     }
@@ -1313,30 +1313,85 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'UPCOMING TRIP',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.2,
-                              color: Color(0xFF9A7A2E),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            upcomingTrip.tripPurpose ?? 'Trip',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF1A1A2E),
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
                           Row(
                             children: [
-                              _formStatusBadge(upcomingTrip.status),
+                              const Expanded(
+                                child: Text(
+                                  'UPCOMING TRIP',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.2,
+                                    color: Color(0xFF9A7A2E),
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF8E1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 6, height: 6,
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFE8A824),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      daysLabel,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFFB08D3A),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  upcomingTrip.tripPurpose ?? 'Trip',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF1A1A2E),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              RichText(
+                                text: TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: '\$$dollars',
+                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)),
+                                    ),
+                                    TextSpan(
+                                      text: '.$cents',
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Flexible(child: _formStatusBadge(upcomingTrip.status)),
                               const SizedBox(width: 8),
                               const Icon(Icons.receipt_long, size: 13, color: Color(0xFF9A7A2E)),
                               const SizedBox(width: 4),
@@ -1348,54 +1403,6 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
                           ),
                         ],
                       ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF8E1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6, height: 6,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFE8A824),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                daysLabel,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFFB08D3A),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        RichText(
-                          text: TextSpan(
-                            children: [
-                              TextSpan(
-                                text: '\$$dollars',
-                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)),
-                              ),
-                              TextSpan(
-                                text: '.$cents',
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -1519,30 +1526,85 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'ACTIVE TRIP',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
-                          color: Color(0xFF9A7A2E),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        activeTrip.tripPurpose ?? 'Trip',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1A1A2E),
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
                       Row(
                         children: [
-                          _formStatusBadge(activeTrip.status),
+                          const Expanded(
+                            child: Text(
+                              'ACTIVE TRIP',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.2,
+                                color: Color(0xFF9A7A2E),
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEDE7F6),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6, height: 6,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF46166B),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'In Progress',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF46166B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              activeTrip.tripPurpose ?? 'Trip',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1A1A2E),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          RichText(
+                            text: TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: '\$$dollars',
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)),
+                                ),
+                                TextSpan(
+                                  text: '.$cents',
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Flexible(child: _formStatusBadge(activeTrip.status)),
                           const SizedBox(width: 8),
                           const Icon(Icons.receipt_long, size: 13, color: Color(0xFF9A7A2E)),
                           const SizedBox(width: 4),
@@ -1557,63 +1619,6 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
                       ),
                     ],
                   ),
-                ),
-                // status + total
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEDE7F6),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6, height: 6,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF46166B),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Text(
-                            'In Progress',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF46166B),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '\$$dollars',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF1A1A2E),
-                            ),
-                          ),
-                          TextSpan(
-                            text: '.$cents',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),

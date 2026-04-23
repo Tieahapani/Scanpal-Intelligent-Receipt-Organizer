@@ -863,6 +863,44 @@ class _AdminTravelerDetailPageState extends State<AdminTravelerDetailPage> {
                   ],
                 ),
               ),
+              // Form status badge
+              if (trip.status != null && trip.status!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(left: 52, top: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _formStatusColors(trip.status!).bg,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 5,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: _formStatusColors(trip.status!).dot,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              trip.status!,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: _formStatusColors(trip.status!).text,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),
@@ -964,6 +1002,33 @@ class _AdminTravelerDetailPageState extends State<AdminTravelerDetailPage> {
         ),
       ),
     );
+  }
+
+  // ─── Form Status Colors ────────────────────────────────
+
+  static ({Color dot, Color text, Color bg}) _formStatusColors(String status) {
+    switch (status) {
+      case 'No ODTA Submitted':
+        return (dot: const Color(0xFF9CA3AF), text: const Color(0xFF6B7280), bg: const Color(0xFFF3F4F6));
+      case 'TAAR Sent':
+        return (dot: const Color(0xFFA855F7), text: const Color(0xFF7E22CE), bg: const Color(0xFFF3E8FF));
+      case 'TAAR Reviewed':
+        return (dot: const Color(0xFFE8A824), text: const Color(0xFFB8860B), bg: const Color(0xFFFFF8E1));
+      case 'TAAR Processed':
+        return (dot: const Color(0xFF7B3FA0), text: const Color(0xFF46166B), bg: const Color(0xFFF0E6F6));
+      case 'TC Sent':
+        return (dot: const Color(0xFFA855F7), text: const Color(0xFF7E22CE), bg: const Color(0xFFF3E8FF));
+      case 'TC Pending Review':
+        return (dot: const Color(0xFFE8A824), text: const Color(0xFFB8860B), bg: const Color(0xFFFFF8E1));
+      case 'TC Correction Needed':
+        return (dot: const Color(0xFFD97706), text: const Color(0xFF92400E), bg: const Color(0xFFFEF3C7));
+      case 'TC Processed':
+        return (dot: const Color(0xFF7B3FA0), text: const Color(0xFF46166B), bg: const Color(0xFFF0E6F6));
+      case 'Approved':
+        return (dot: const Color(0xFF46166B), text: const Color(0xFF46166B), bg: const Color(0xFFF0E6F6));
+      default:
+        return (dot: const Color(0xFFA78BFA), text: const Color(0xFF7C3AED), bg: const Color(0xFFF5F3FF));
+    }
   }
 
   // ─── Helpers ───────────────────────────────────────────

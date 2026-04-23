@@ -78,21 +78,21 @@ class _TripsPageState extends State<TripsPage> {
       case 'No ODTA Submitted':
         return (dot: const Color(0xFF9CA3AF), text: const Color(0xFF6B7280), bg: const Color(0xFFF3F4F6));
       case 'TAAR Sent':
-        return (dot: const Color(0xFF60A5FA), text: const Color(0xFF2563EB), bg: const Color(0xFFEFF6FF));
+        return (dot: const Color(0xFFA855F7), text: const Color(0xFF7E22CE), bg: const Color(0xFFF3E8FF));
       case 'TAAR Reviewed':
-        return (dot: const Color(0xFFFBBF24), text: const Color(0xFFD97706), bg: const Color(0xFFFFFBEB));
+        return (dot: const Color(0xFFE8A824), text: const Color(0xFFB8860B), bg: const Color(0xFFFFF8E1));
       case 'TAAR Processed':
-        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+        return (dot: const Color(0xFF7B3FA0), text: const Color(0xFF46166B), bg: const Color(0xFFF0E6F6));
       case 'TC Sent':
-        return (dot: const Color(0xFF60A5FA), text: const Color(0xFF2563EB), bg: const Color(0xFFEFF6FF));
+        return (dot: const Color(0xFFA855F7), text: const Color(0xFF7E22CE), bg: const Color(0xFFF3E8FF));
       case 'TC Pending Review':
-        return (dot: const Color(0xFFFBBF24), text: const Color(0xFFD97706), bg: const Color(0xFFFFFBEB));
+        return (dot: const Color(0xFFE8A824), text: const Color(0xFFB8860B), bg: const Color(0xFFFFF8E1));
       case 'TC Correction Needed':
-        return (dot: const Color(0xFFF87171), text: const Color(0xFFDC2626), bg: const Color(0xFFFEF2F2));
+        return (dot: const Color(0xFFD97706), text: const Color(0xFF92400E), bg: const Color(0xFFFEF3C7));
       case 'TC Processed':
-        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+        return (dot: const Color(0xFF7B3FA0), text: const Color(0xFF46166B), bg: const Color(0xFFF0E6F6));
       case 'Approved':
-        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+        return (dot: const Color(0xFF46166B), text: const Color(0xFF46166B), bg: const Color(0xFFF0E6F6));
       default:
         return (dot: const Color(0xFFA78BFA), text: const Color(0xFF7C3AED), bg: const Color(0xFFF5F3FF));
     }
