@@ -558,17 +558,15 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                             ),
                             GestureDetector(
                               onTap: () {
-                                if (_emailCtrl.text.trim().isNotEmpty) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => RegisterPage(
-                                        email: _emailCtrl.text.trim(),
-                                        rememberMe: _rememberMe,
-                                      ),
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => RegisterPage(
+                                      email: _emailCtrl.text.trim(),
+                                      rememberMe: _rememberMe,
                                     ),
-                                  );
-                                }
+                                  ),
+                                );
                               },
                               child: const Text(
                                 'Register',

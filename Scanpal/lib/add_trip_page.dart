@@ -28,8 +28,6 @@ class _AddTripPageState extends State<AddTripPage> {
   DateTime? _startDate;
   DateTime? _endDate;
   String _category = 'Conference';
-  String _status = 'Upcoming';
-  String? _travelType;
   Department? _selectedDepartment;
   List<Department> _departments = [];
   bool _saving = false;
@@ -46,8 +44,6 @@ class _AddTripPageState extends State<AddTripPage> {
     'Workshop',
     'Other',
   ];
-  static const _statuses = ['Active', 'Completed', 'Upcoming'];
-  static const _travelTypes = ['TAAR', 'One Day Travel', 'Exception'];
 
   @override
   void initState() {
@@ -113,9 +109,7 @@ class _AddTripPageState extends State<AddTripPage> {
         'destination': dest,
         'departure_date': _startDate!.toIso8601String().split('T')[0],
         'return_date': _endDate!.toIso8601String().split('T')[0],
-        'travel_type': _travelType,
         'category': _category,
-        'status': _status.toLowerCase(),
         'description': _descCtrl.text.trim(),
         'travelers': _selectedTravelers.map((t) => t['email']).join(','),
         'department': _selectedDepartment!.name,
@@ -252,38 +246,6 @@ class _AddTripPageState extends State<AddTripPage> {
                       ],
                     ),
                     const SizedBox(height: 18),
-                    // Travel Type
-                    _fieldLabel('TRAVEL TYPE'),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _travelTypes.map((type) {
-                        final selected = _travelType == type;
-                        return GestureDetector(
-                          onTap: () => setState(() => _travelType = type),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: selected ? const Color(0xFF46166B) : Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: selected ? const Color(0xFF46166B) : Colors.grey.shade300,
-                              ),
-                            ),
-                            child: Text(
-                              type,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: selected ? Colors.white : Colors.grey.shade600,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 18),
                     // Category
                     _fieldLabel('CATEGORY'),
                     const SizedBox(height: 8),
@@ -310,45 +272,6 @@ class _AddTripPageState extends State<AddTripPage> {
                             ),
                             child: Text(
                               cat,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: selected
-                                    ? Colors.white
-                                    : const Color(0xFF4B5563),
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 18),
-                    // Status
-                    _fieldLabel('STATUS'),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _statuses.map((s) {
-                        final selected = _status == s;
-                        return GestureDetector(
-                          onTap: () => setState(() => _status = s),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? const Color(0xFF1F2937)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: selected
-                                    ? const Color(0xFF1F2937)
-                                    : Colors.grey.shade300,
-                              ),
-                            ),
-                            child: Text(
-                              s,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,

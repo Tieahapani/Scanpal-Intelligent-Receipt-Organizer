@@ -1029,7 +1029,7 @@ def _upsert_trip(db, parsed, traveler_email):
             existing.departure_date = parsed["departure_date"]
         if parsed.get("return_date") and not existing.return_date:
             existing.return_date = parsed["return_date"]
-        if parsed.get("status") and not existing.status:
+        if parsed.get("status"):
             existing.status = parsed["status"]
         # Preserve app-only fields (budget, category, description, travelers)
         # Fetch image only if no image yet (don't overwrite app-edited cover)
@@ -3110,6 +3110,17 @@ def change_trip_status_alert(trip_id):
         )
         db.add(alert)
         db.commit()
+
+        # Sync status to Notion
+        if trip.notion_page_id:
+            try:
+                notion.update_page(trip.notion_page_id, {
+                    "Status": {"status": {"name": new_status}}
+                })
+                logging.info(f"Notion status synced: {trip.notion_page_id} → {new_status}")
+            except Exception as notion_err:
+                logging.error(f"Notion status sync failed: {notion_err}")
+
         return jsonify({"alert": alert.to_dict(), "trip": trip.to_dict()}), 201
     except Exception as e:
         db.rollback()

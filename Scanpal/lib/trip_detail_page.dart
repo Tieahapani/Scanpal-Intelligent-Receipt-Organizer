@@ -107,22 +107,113 @@ class _TripDetailPageState extends State<TripDetailPage> {
     }
   }
 
-  String get _statusLabel {
-    final s = _trip.status?.toLowerCase();
-    if (s == 'active') return 'Active';
-    if (s == 'completed') return 'Completed';
-    if (s == 'upcoming') return 'Upcoming';
-    if (_trip.isActive) return 'Active';
-    if (_trip.isUpcoming) return 'Upcoming';
-    if (_trip.isPast) return 'Completed';
-    return 'Active';
+  static const _formStatuses = [
+    'No ODTA Submitted',
+    'TAAR Sent',
+    'TAAR Reviewed',
+    'TAAR Processed',
+    'TC Sent',
+    'TC Pending Review',
+    'TC Correction Needed',
+    'TC Processed',
+  ];
+
+  String? get _formStatusLabel => _trip.status;
+
+  static ({Color dot, Color text, Color bg}) _formStatusColors(String status) {
+    switch (status) {
+      case 'No ODTA Submitted':
+        return (dot: const Color(0xFF9CA3AF), text: const Color(0xFF6B7280), bg: const Color(0xFFF3F4F6));
+      case 'TAAR Sent':
+        return (dot: const Color(0xFF60A5FA), text: const Color(0xFF2563EB), bg: const Color(0xFFEFF6FF));
+      case 'TAAR Reviewed':
+        return (dot: const Color(0xFFFBBF24), text: const Color(0xFFD97706), bg: const Color(0xFFFFFBEB));
+      case 'TAAR Processed':
+        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+      case 'TC Sent':
+        return (dot: const Color(0xFF60A5FA), text: const Color(0xFF2563EB), bg: const Color(0xFFEFF6FF));
+      case 'TC Pending Review':
+        return (dot: const Color(0xFFFBBF24), text: const Color(0xFFD97706), bg: const Color(0xFFFFFBEB));
+      case 'TC Correction Needed':
+        return (dot: const Color(0xFFF87171), text: const Color(0xFFDC2626), bg: const Color(0xFFFEF2F2));
+      case 'TC Processed':
+        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+      case 'Approved':
+        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+      default:
+        return (dot: const Color(0xFFA78BFA), text: const Color(0xFF7C3AED), bg: const Color(0xFFF5F3FF));
+    }
   }
 
-  Color get _statusDotColor {
-    final label = _statusLabel;
-    if (label == 'Active') return const Color(0xFF34D399);
-    if (label == 'Upcoming') return const Color(0xFF60A5FA);
-    return const Color(0xFF9CA3AF);
+  Future<void> _changeFormStatus(String newStatus) async {
+    try {
+      final result = await _api.changeTripStatus(_trip.id, newStatus);
+      if (mounted) {
+        final tripData = result['trip'] as Map<String, dynamic>;
+        setState(() => _trip = Trip.fromMap(tripData));
+        _showToast('Status updated to $newStatus');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showToast('Failed to update status: $e', isError: true);
+      }
+    }
+  }
+
+  void _showStatusPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Change Form Status',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF111827)),
+              ),
+              const SizedBox(height: 12),
+              ..._formStatuses.map((s) {
+                final colors = _formStatusColors(s);
+                final isSelected = s == _formStatusLabel;
+                return ListTile(
+                  leading: Container(
+                    width: 10, height: 10,
+                    decoration: BoxDecoration(color: colors.dot, shape: BoxShape.circle),
+                  ),
+                  title: Text(s, style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected ? const Color(0xFF46166B) : const Color(0xFF374151),
+                  )),
+                  trailing: isSelected ? const Icon(Icons.check, color: Color(0xFF46166B), size: 20) : null,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    if (!isSelected) _changeFormStatus(s);
+                  },
+                );
+              }),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   int get _durationDays {
@@ -499,36 +590,44 @@ class _TripDetailPageState extends State<TripDetailPage> {
                   // Status + category badges
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.4),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: _statusDotColor,
-                                shape: BoxShape.circle,
-                              ),
+                      if (_formStatusLabel != null)
+                        GestureDetector(
+                          onTap: _isAdmin ? _showStatusPicker : null,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: _formStatusColors(_formStatusLabel!).bg,
+                              borderRadius: BorderRadius.circular(20),
                             ),
-                            const SizedBox(width: 5),
-                            Text(
-                              _statusLabel,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: _formStatusColors(_formStatusLabel!).dot,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  _formStatusLabel!,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: _formStatusColors(_formStatusLabel!).text,
+                                  ),
+                                ),
+                                if (_isAdmin) ...[
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.arrow_drop_down, size: 14, color: _formStatusColors(_formStatusLabel!).text),
+                                ],
+                              ],
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
+                      if (_formStatusLabel != null) const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
@@ -1821,13 +1920,9 @@ class _EditTripSheetState extends State<_EditTripSheet> {
   DateTime? _startDate;
   DateTime? _endDate;
   String _category = 'Conference';
-  String _status = 'Active';
-  String? _travelType;
   bool _saving = false;
 
   static const _categories = ['Conference', 'Advocacy', 'Meeting', 'Retreat', 'Workshop', 'Other'];
-  static const _statuses = ['Active', 'Completed', 'Upcoming'];
-  static const _travelTypes = ['TAAR', 'One Day Travel', 'Exception'];
 
   @override
   void initState() {
@@ -1835,7 +1930,6 @@ class _EditTripSheetState extends State<_EditTripSheet> {
     final t = widget.trip;
     _nameCtrl = TextEditingController(text: t.tripPurpose ?? '');
     _destCtrl = TextEditingController(text: t.destination ?? '');
-    _travelType = t.travelType;
     _descCtrl = TextEditingController(text: t.description ?? '');
     // Parse existing travelers (comma-separated emails) into chip data
     if (t.travelers != null && t.travelers!.trim().isNotEmpty) {
@@ -1848,7 +1942,6 @@ class _EditTripSheetState extends State<_EditTripSheet> {
     _startDate = t.departureDate;
     _endDate = t.returnDate;
     _category = t.category ?? _inferCategory(t.tripPurpose);
-    _status = _inferStatus(t);
   }
 
   String _inferCategory(String? purpose) {
@@ -1858,13 +1951,6 @@ class _EditTripSheetState extends State<_EditTripSheet> {
       if (p.contains(cat.toLowerCase())) return cat;
     }
     return 'Conference';
-  }
-
-  String _inferStatus(Trip t) {
-    if (t.isActive) return 'Active';
-    if (t.isUpcoming) return 'Upcoming';
-    if (t.isPast) return 'Completed';
-    return 'Active';
   }
 
   @override
@@ -1900,9 +1986,7 @@ class _EditTripSheetState extends State<_EditTripSheet> {
         'destination': _destCtrl.text.trim(),
         'departure_date': _startDate?.toIso8601String(),
         'return_date': _endDate?.toIso8601String(),
-        'travel_type': _travelType,
         'category': _category,
-        'status': _status.toLowerCase(),
         'description': _descCtrl.text.trim(),
         'travelers': _selectedTravelers.map((t) => t['email']).join(','),
       };
@@ -2025,38 +2109,6 @@ class _EditTripSheetState extends State<_EditTripSheet> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  // Travel Type
-                  _fieldLabel('TRAVEL TYPE'),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: _travelTypes.map((type) {
-                      final selected = _travelType == type;
-                      return GestureDetector(
-                        onTap: () => setState(() => _travelType = type),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: selected ? const Color(0xFF46166B) : Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: selected ? const Color(0xFF46166B) : Colors.grey.shade300,
-                            ),
-                          ),
-                          child: Text(
-                            type,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: selected ? Colors.white : Colors.grey.shade600,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 14),
                   // Category
                   _fieldLabel('CATEGORY'),
                   const SizedBox(height: 6),
@@ -2078,38 +2130,6 @@ class _EditTripSheetState extends State<_EditTripSheet> {
                           ),
                           child: Text(
                             cat,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: selected ? Colors.white : const Color(0xFF4B5563),
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 14),
-                  // Status
-                  _fieldLabel('STATUS'),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: _statuses.map((s) {
-                      final selected = _status == s;
-                      return GestureDetector(
-                        onTap: () => setState(() => _status = s),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: selected ? const Color(0xFF1F2937) : Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: selected ? const Color(0xFF1F2937) : Colors.grey.shade300,
-                            ),
-                          ),
-                          child: Text(
-                            s,
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w500,

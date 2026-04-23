@@ -191,6 +191,57 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
     );
   }
 
+  static ({Color dot, Color text, Color bg}) _formStatusColors(String status) {
+    switch (status) {
+      case 'No ODTA Submitted':
+        return (dot: const Color(0xFF9CA3AF), text: const Color(0xFF6B7280), bg: const Color(0xFFF3F4F6));
+      case 'TAAR Sent':
+        return (dot: const Color(0xFF60A5FA), text: const Color(0xFF2563EB), bg: const Color(0xFFEFF6FF));
+      case 'TAAR Reviewed':
+        return (dot: const Color(0xFFFBBF24), text: const Color(0xFFD97706), bg: const Color(0xFFFFFBEB));
+      case 'TAAR Processed':
+        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+      case 'TC Sent':
+        return (dot: const Color(0xFF60A5FA), text: const Color(0xFF2563EB), bg: const Color(0xFFEFF6FF));
+      case 'TC Pending Review':
+        return (dot: const Color(0xFFFBBF24), text: const Color(0xFFD97706), bg: const Color(0xFFFFFBEB));
+      case 'TC Correction Needed':
+        return (dot: const Color(0xFFF87171), text: const Color(0xFFDC2626), bg: const Color(0xFFFEF2F2));
+      case 'TC Processed':
+        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+      case 'Approved':
+        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+      default:
+        return (dot: const Color(0xFFA78BFA), text: const Color(0xFF7C3AED), bg: const Color(0xFFF5F3FF));
+    }
+  }
+
+  Widget _formStatusBadge(String? status) {
+    if (status == null || status.isEmpty) return const SizedBox.shrink();
+    final colors = _formStatusColors(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: colors.bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 5, height: 5,
+            decoration: BoxDecoration(color: colors.dot, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            status,
+            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: colors.text),
+          ),
+        ],
+      ),
+    );
+  }
+
   int get _alertCount => _backendAlertCount;
 
   Future<void> _handleScan(ImageSource source) async {
@@ -1285,6 +1336,8 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
                           const SizedBox(height: 4),
                           Row(
                             children: [
+                              _formStatusBadge(upcomingTrip.status),
+                              const SizedBox(width: 8),
                               const Icon(Icons.receipt_long, size: 13, color: Color(0xFF9A7A2E)),
                               const SizedBox(width: 4),
                               Text(
@@ -1489,6 +1542,8 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
                       const SizedBox(height: 4),
                       Row(
                         children: [
+                          _formStatusBadge(activeTrip.status),
+                          const SizedBox(width: 8),
                           const Icon(Icons.receipt_long, size: 13, color: Color(0xFF9A7A2E)),
                           const SizedBox(width: 4),
                           Text(

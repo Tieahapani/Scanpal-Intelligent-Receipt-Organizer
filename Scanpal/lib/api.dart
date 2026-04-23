@@ -891,6 +891,21 @@ class APIService {
   }
 
   /// Approve a trip and optionally send a comment to the traveler.
+  Future<Map<String, dynamic>> changeTripStatus(String tripId, String status) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/trips/$tripId/status-change');
+      final headers = await _authHeaders();
+      final res = await http
+          .post(uri, headers: headers, body: jsonEncode({'status': status}))
+          .timeout(_timeout);
+      debugPrint('POST /trips/$tripId/status-change ${res.statusCode}');
+      if (res.statusCode != 201) {
+        throw Exception('Status change failed: ${res.statusCode}');
+      }
+      return Map<String, dynamic>.from(jsonDecode(res.body));
+    });
+  }
+
   Future<Map<String, dynamic>> approveTrip(String tripId, {String? comment}) async {
     return _withRetry(() async {
       final uri = Uri.parse('$baseUrl/trips/$tripId/approve');

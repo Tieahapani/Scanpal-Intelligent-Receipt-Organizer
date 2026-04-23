@@ -72,6 +72,32 @@ class _TripsPageState extends State<TripsPage> {
     return 'active';
   }
 
+  /// Notion form status colors
+  static ({Color dot, Color text, Color bg}) _formStatusColors(String status) {
+    switch (status) {
+      case 'No ODTA Submitted':
+        return (dot: const Color(0xFF9CA3AF), text: const Color(0xFF6B7280), bg: const Color(0xFFF3F4F6));
+      case 'TAAR Sent':
+        return (dot: const Color(0xFF60A5FA), text: const Color(0xFF2563EB), bg: const Color(0xFFEFF6FF));
+      case 'TAAR Reviewed':
+        return (dot: const Color(0xFFFBBF24), text: const Color(0xFFD97706), bg: const Color(0xFFFFFBEB));
+      case 'TAAR Processed':
+        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+      case 'TC Sent':
+        return (dot: const Color(0xFF60A5FA), text: const Color(0xFF2563EB), bg: const Color(0xFFEFF6FF));
+      case 'TC Pending Review':
+        return (dot: const Color(0xFFFBBF24), text: const Color(0xFFD97706), bg: const Color(0xFFFFFBEB));
+      case 'TC Correction Needed':
+        return (dot: const Color(0xFFF87171), text: const Color(0xFFDC2626), bg: const Color(0xFFFEF2F2));
+      case 'TC Processed':
+        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+      case 'Approved':
+        return (dot: const Color(0xFF34D399), text: const Color(0xFF059669), bg: const Color(0xFFECFDF5));
+      default:
+        return (dot: const Color(0xFFA78BFA), text: const Color(0xFF7C3AED), bg: const Color(0xFFF5F3FF));
+    }
+  }
+
   List<String> get _availableDepartments {
     if (_departments.isNotEmpty) return _departments.map((d) => d.name).toList();
     // Fallback: derive from trips if API hasn't responded yet
@@ -892,7 +918,6 @@ class _TripsPageState extends State<TripsPage> {
   ];
 
   Widget _buildTripCard(Trip trip, NumberFormat currency) {
-    final status = _tripStatus(trip);
     final dateFormat = DateFormat('MMM d, yyyy');
     String dateRange = '';
     if (trip.departureDate != null && trip.returnDate != null) {
@@ -901,30 +926,9 @@ class _TripsPageState extends State<TripsPage> {
       dateRange = dateFormat.format(trip.departureDate!);
     }
 
-    // Status config
-    Color statusDotColor;
-    Color statusTextColor;
-    Color statusBgColor;
-    String statusLabel;
-    switch (status) {
-      case 'active':
-        statusDotColor = const Color(0xFF34D399);
-        statusTextColor = const Color(0xFF059669);
-        statusBgColor = const Color(0xFFECFDF5);
-        statusLabel = 'Active';
-        break;
-      case 'upcoming':
-        statusDotColor = const Color(0xFF60A5FA);
-        statusTextColor = const Color(0xFF2563EB);
-        statusBgColor = const Color(0xFFEFF6FF);
-        statusLabel = 'Upcoming';
-        break;
-      default:
-        statusDotColor = const Color(0xFF9CA3AF);
-        statusTextColor = const Color(0xFF6B7280);
-        statusBgColor = const Color(0xFFF3F4F6);
-        statusLabel = 'Completed';
-    }
+    // Form status from Notion
+    final formStatus = trip.status;
+    final formColors = formStatus != null ? _formStatusColors(formStatus) : null;
 
     // Thumbnail
     final dest = trip.destination ?? trip.tripPurpose ?? '';
@@ -1017,35 +1021,36 @@ class _TripsPageState extends State<TripsPage> {
                     // Status badge + destination
                     Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: statusBgColor,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 5,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                  color: statusDotColor,
-                                  shape: BoxShape.circle,
+                        if (formStatus != null && formColors != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: formColors.bg,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 5,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    color: formColors.dot,
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                statusLabel,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: statusTextColor,
+                                const SizedBox(width: 4),
+                                Text(
+                                  formStatus,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: formColors.text,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
                         if (trip.destination != null) ...[
                           const SizedBox(width: 8),
                           Icon(Icons.location_on_outlined, size: 12, color: Colors.grey.shade400),
