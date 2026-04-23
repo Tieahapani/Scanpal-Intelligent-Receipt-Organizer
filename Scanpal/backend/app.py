@@ -6,6 +6,7 @@ import secrets
 import bcrypt
 import threading
 import time
+import random
 from datetime import datetime, timezone, timedelta
 
 from flask import Flask, request, jsonify, g, Response
@@ -67,6 +68,87 @@ with engine.connect() as conn:
 
 # Configure Gemini
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+
+
+# ─── Gemini Rate Limiter & Retry Logic (Google ADK pattern) ──────────────
+class GeminiRateLimiter:
+    """Token bucket rate limiter to smooth Gemini API traffic."""
+
+    def __init__(self, requests_per_minute=15, burst=5):
+        self._rate = requests_per_minute / 60.0  # tokens per second
+        self._max_tokens = burst
+        self._tokens = float(burst)
+        self._last_refill = time.monotonic()
+        self._lock = threading.Lock()
+
+    def acquire(self, timeout=30):
+        """Block until a token is available or timeout is reached."""
+        deadline = time.monotonic() + timeout
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                elapsed = now - self._last_refill
+                self._tokens = min(self._max_tokens, self._tokens + elapsed * self._rate)
+                self._last_refill = now
+                if self._tokens >= 1.0:
+                    self._tokens -= 1.0
+                    return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.1)
+
+
+_gemini_limiter = GeminiRateLimiter(
+    requests_per_minute=int(os.environ.get("GEMINI_RPM", 15)),
+    burst=int(os.environ.get("GEMINI_BURST", 5)),
+)
+
+
+def gemini_call_with_retry(model, content, generation_config=None,
+                           max_retries=5, initial_delay=1.0, max_delay=60.0):
+    """Call Gemini with exponential backoff, jitter, and rate limiting.
+
+    Follows Google ADK recommended retry pattern:
+    - Initial delay: 1s, doubles each retry up to 60s cap
+    - Full jitter: random(0, delay) to prevent thundering herd
+    - Token bucket rate limiter to smooth traffic spikes
+    - Retries on 429 (ResourceExhausted) and 503 (ServiceUnavailable)
+    """
+    if not _gemini_limiter.acquire(timeout=30):
+        raise Exception("Rate limit queue timeout — too many concurrent requests")
+
+    delay = initial_delay
+    last_err = None
+
+    for attempt in range(max_retries):
+        try:
+            kwargs = {"generation_config": generation_config} if generation_config else {}
+            response = model.generate_content(content, **kwargs)
+            logging.info(f"Gemini call SUCCESS (attempt {attempt + 1}/{max_retries})")
+            return response
+        except google.api_core.exceptions.ResourceExhausted as e:
+            last_err = e
+            jittered = random.uniform(0, delay)
+            logging.warning(
+                f"Gemini 429, retry {attempt + 1}/{max_retries} in {jittered:.1f}s "
+                f"(base delay {delay:.0f}s)"
+            )
+            time.sleep(jittered)
+            delay = min(delay * 2, max_delay)
+        except google.api_core.exceptions.ServiceUnavailable as e:
+            last_err = e
+            jittered = random.uniform(0, delay)
+            logging.warning(
+                f"Gemini 503, retry {attempt + 1}/{max_retries} in {jittered:.1f}s"
+            )
+            time.sleep(jittered)
+            delay = min(delay * 2, max_delay)
+        except Exception:
+            raise
+
+    logging.error(f"Gemini exhausted after {max_retries} retries: {last_err}")
+    raise last_err
+
 
 # Initialize Notion service
 notion = NotionService()
@@ -1313,25 +1395,15 @@ Return ONLY valid JSON in this EXACT format (no markdown, no extra text):
 """
 
         model = genai.GenerativeModel("gemini-2.0-flash")
-        response = None
-        for attempt in range(3):
-            try:
-                response = model.generate_content(prompt)
-                logging.info("Gemini call SUCCESS")
-                break
-            except google.api_core.exceptions.ResourceExhausted:
-                if attempt < 2:
-                    wait = 2 ** attempt  # 1s, 2s
-                    logging.warning(f"Gemini 429, retrying in {wait}s (attempt {attempt + 1}/3)")
-                    time.sleep(wait)
-                else:
-                    logging.error("Gemini quota exhausted after 3 attempts")
-                    return jsonify({"error": "AI service is busy. Please try again in a moment."}), 429
-            except Exception as gemini_err:
-                logging.error(f"GEMINI ERROR: {gemini_err}")
-                raise
-        if response is None:
+        try:
+            response = gemini_call_with_retry(model, prompt)
+        except google.api_core.exceptions.ResourceExhausted:
+            return jsonify({"error": "AI service is busy. Please try again in a moment."}), 429
+        except google.api_core.exceptions.ServiceUnavailable:
             return jsonify({"error": "AI service unavailable"}), 503
+        except Exception as gemini_err:
+            logging.error(f"GEMINI ERROR: {gemini_err}")
+            raise
 
         text = response.text.strip()
 
@@ -2323,46 +2395,6 @@ def _get_trip_category_value(trip, category):
     }
     return mapping.get(category, 0) or 0
 
-
-# =============================================================================
-# REPORT SUMMARY (Gemini)
-# =============================================================================
-
-@app.post("/report/summary")
-@require_auth
-def report_summary():
-    """Generate an AI expense summary via Gemini. Keeps the API key server-side."""
-    data = request.get_json(force=True)
-    prompt = data.get("prompt", "")
-    if not prompt:
-        return jsonify({"error": "prompt is required"}), 400
-
-    try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        response = None
-        for attempt in range(3):
-            try:
-                response = model.generate_content(
-                    prompt,
-                    generation_config=genai.types.GenerationConfig(
-                        temperature=0.4,
-                        max_output_tokens=500,
-                    ),
-                )
-                break
-            except google.api_core.exceptions.ResourceExhausted:
-                if attempt < 2:
-                    wait = 2 ** attempt
-                    logging.warning(f"Gemini report 429, retrying in {wait}s (attempt {attempt + 1}/3)")
-                    time.sleep(wait)
-                else:
-                    return jsonify({"error": "AI service is busy. Please try again in a moment."}), 429
-        if response is None:
-            return jsonify({"error": "AI service unavailable"}), 503
-        return jsonify({"summary": response.text.strip()}), 200
-    except Exception as e:
-        logging.error(f"Gemini report summary error: {e}")
-        return jsonify({"error": str(e)}), 500
 
 
 # =============================================================================

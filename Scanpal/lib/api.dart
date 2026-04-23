@@ -802,28 +802,6 @@ class APIService {
     return _cachedDeptObjects!;
   }
 
-  // ─── Report Summary (Gemini via backend) ───────────────
-
-  Future<String> generateReportSummary(String prompt) async {
-    final token = await AuthService.instance.getToken();
-    final uri = Uri.parse('$baseUrl/report/summary');
-    final res = await http.post(
-      uri,
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({'prompt': prompt}),
-    ).timeout(const Duration(seconds: 30));
-
-    if (res.statusCode != 200) {
-      throw Exception('Report summary failed: ${res.statusCode}');
-    }
-
-    final data = jsonDecode(res.body);
-    return data['summary'] as String;
-  }
-
   // ─── Health ───────────────────────────────────────────
 
   Future<bool> isServerAlive() async {
