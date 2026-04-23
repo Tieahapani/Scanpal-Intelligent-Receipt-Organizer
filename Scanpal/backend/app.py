@@ -105,22 +105,21 @@ _gemini_limiter = GeminiRateLimiter(
 
 
 def gemini_call_with_retry(model, content, generation_config=None,
-                           max_retries=5, initial_delay=1.0, max_delay=60.0):
+                           max_retries=5, initial_delay=4.0, max_delay=60.0):
     """Call Gemini with exponential backoff, jitter, and rate limiting.
 
-    Follows Google ADK recommended retry pattern:
-    - Initial delay: 1s, doubles each retry up to 60s cap
-    - Full jitter: random(0, delay) to prevent thundering herd
-    - Token bucket rate limiter to smooth traffic spikes
+    Each attempt (including retries) acquires a rate limiter token first,
+    so retries are properly spaced at the configured RPM.
+    - Initial delay: 4s (safe for 15 RPM = 1 req every 4s)
+    - Full jitter: random(delay/2, delay) to avoid thundering herd
     - Retries on 429 (ResourceExhausted) and 503 (ServiceUnavailable)
     """
-    if not _gemini_limiter.acquire(timeout=30):
-        raise Exception("Rate limit queue timeout — too many concurrent requests")
-
     delay = initial_delay
     last_err = None
 
     for attempt in range(max_retries):
+        if not _gemini_limiter.acquire(timeout=60):
+            raise Exception("Rate limit queue timeout — too many concurrent requests")
         try:
             kwargs = {"generation_config": generation_config} if generation_config else {}
             response = model.generate_content(content, **kwargs)
@@ -128,7 +127,7 @@ def gemini_call_with_retry(model, content, generation_config=None,
             return response
         except google.api_core.exceptions.ResourceExhausted as e:
             last_err = e
-            jittered = random.uniform(0, delay)
+            jittered = random.uniform(delay / 2, delay)
             logging.warning(
                 f"Gemini 429, retry {attempt + 1}/{max_retries} in {jittered:.1f}s "
                 f"(base delay {delay:.0f}s)"
@@ -137,7 +136,7 @@ def gemini_call_with_retry(model, content, generation_config=None,
             delay = min(delay * 2, max_delay)
         except google.api_core.exceptions.ServiceUnavailable as e:
             last_err = e
-            jittered = random.uniform(0, delay)
+            jittered = random.uniform(delay / 2, delay)
             logging.warning(
                 f"Gemini 503, retry {attempt + 1}/{max_retries} in {jittered:.1f}s"
             )
