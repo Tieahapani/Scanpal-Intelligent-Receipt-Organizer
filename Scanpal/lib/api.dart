@@ -384,7 +384,7 @@ class APIService {
   // ─── Receipts ─────────────────────────────────────────
 
   /// Uploads a receipt and returns both the receipt and (optionally) the updated trip.
-  Future<({Receipt receipt, Trip? trip})> uploadReceipt(File image, {required String tripId, String paymentMethod = 'personal'}) async {
+  Future<({Receipt receipt, Trip? trip, String? warning})> uploadReceipt(File image, {required String tripId, String paymentMethod = 'personal'}) async {
     return _withRetry(() async {
       final uri = Uri.parse('$baseUrl/expense');
       debugPrint('POST $uri (file=${image.path})');
@@ -416,7 +416,9 @@ class APIService {
         updatedTrip = Trip.fromMap(Map<String, dynamic>.from(data['trip']));
       }
 
-      return (receipt: receipt, trip: updatedTrip);
+      final warning = data['warning'] as String?;
+
+      return (receipt: receipt, trip: updatedTrip, warning: warning);
     });
   }
 

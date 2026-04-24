@@ -56,20 +56,32 @@ class NotionService:
             self._request_times.append(time.monotonic())
 
     def _request(self, method, url, **kwargs):
-        """Make a rate-limited request with retry on 429."""
+        """Make a rate-limited request with retry on 429/502/503/504."""
+        kwargs.setdefault("timeout", 15)
+        last_err = None
         for attempt in range(5):
             self._rate_limit()
-            resp = requests.request(method, url, headers=self.headers, **kwargs)
+            try:
+                resp = requests.request(method, url, headers=self.headers, **kwargs)
+            except requests.exceptions.Timeout:
+                last_err = Exception(f"Notion API timeout on attempt {attempt + 1}")
+                logger.warning(f"Notion timeout, retry {attempt + 1}/5")
+                time.sleep(min(2 ** attempt, 16))
+                continue
             if resp.status_code == 429:
                 retry_after = int(resp.headers.get("Retry-After", 1))
                 logger.warning(f"Notion 429, retrying after {retry_after}s")
                 time.sleep(retry_after)
                 continue
+            if resp.status_code in (502, 503, 504):
+                logger.warning(f"Notion {resp.status_code}, retry {attempt + 1}/5")
+                time.sleep(min(2 ** attempt, 16))
+                continue
             if resp.status_code >= 400:
                 logger.error(f"Notion {resp.status_code}: {resp.text}")
             resp.raise_for_status()
             return resp.json()
-        raise Exception("Notion API: too many retries on 429")
+        raise last_err or Exception("Notion API: exhausted retries")
 
     # ─── Database Queries ───────────────────────────────────
 

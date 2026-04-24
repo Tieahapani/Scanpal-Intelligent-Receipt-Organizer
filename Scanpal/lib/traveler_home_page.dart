@@ -302,6 +302,38 @@ class _TravelerHomePageState extends State<TravelerHomePage> {
         _analyticsService = AnalyticsService(receipts: _receipts, trips: _trips);
       });
 
+      // Show warning if Notion sync failed
+      if (result.warning != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.cloud_off_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Receipt saved successfully',
+                          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 14)),
+                      const SizedBox(height: 2),
+                      Text('Notion sync delayed — will update on next refresh',
+                          style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFFE67E22),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+
       // Auto-dismiss after 2 seconds, then show meal type picker if Meals
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {

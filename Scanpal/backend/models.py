@@ -130,6 +130,7 @@ class Receipt(Base):
     payment_method = Column(String(20), default="personal")  # "personal" or "corporate"
     added_by = Column(String(20), default="traveler")  # "traveler" or "admin"
     meal_type = Column(String(20), nullable=True)  # breakfast, lunch, dinner, incidentals, hospitality
+    notion_sync_pending = Column(Boolean, default=False)  # True when Notion update failed and needs retry
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     trip = relationship("Trip", back_populates="receipts")

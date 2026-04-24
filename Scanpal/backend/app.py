@@ -1487,6 +1487,8 @@ Return ONLY valid JSON in this EXACT format (no markdown, no extra text):
                             logging.info(f"Notion auto-updated: {detected_category} += {amount} for trip {trip.id}")
                         except Exception as notion_err:
                             logging.error(f"Notion auto-write failed (receipt saved locally): {notion_err}")
+                            receipt.notion_sync_pending = True
+                            data["warning"] = "Receipt saved but Notion sync delayed. It will sync automatically shortly."
 
             # Notify about the new receipt
             merchant_name = data.get("merchant") or "Unknown"
