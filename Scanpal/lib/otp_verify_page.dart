@@ -97,15 +97,6 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
     }
   }
 
-  void _onKeyDown(int index, KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.backspace &&
-        _digitControllers[index].text.isEmpty &&
-        index > 0) {
-      _focusNodes[index - 1].requestFocus();
-    }
-  }
-
   Future<void> _verify() async {
     final code = _code;
     if (code.length != 6) {
@@ -273,9 +264,17 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
                           child: Container(
                             height: 56,
                             margin: EdgeInsets.only(right: index < 5 ? 8 : 0),
-                            child: KeyboardListener(
-                              focusNode: FocusNode(),
-                              onKeyEvent: (event) => _onKeyDown(index, event),
+                            child: Focus(
+                              onKeyEvent: (node, event) {
+                                if (event is KeyDownEvent &&
+                                    event.logicalKey == LogicalKeyboardKey.backspace &&
+                                    _digitControllers[index].text.isEmpty &&
+                                    index > 0) {
+                                  _focusNodes[index - 1].requestFocus();
+                                  return KeyEventResult.handled;
+                                }
+                                return KeyEventResult.ignored;
+                              },
                               child: TextField(
                                 controller: _digitControllers[index],
                                 focusNode: _focusNodes[index],
@@ -430,33 +429,32 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
                               ],
                             ),
                           ),
+                    const SizedBox(height: 32),
+
+                    // Footer
+                    Column(
+                      children: [
+                        Opacity(
+                          opacity: 0.3,
+                          child: Image.asset(
+                            'assets/asgo_logo.jpeg',
+                            width: 64,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Associated Students \u00B7 SF State',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFFD1D5DB),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
                   ],
                 ),
-              ),
-            ),
-
-            // Footer
-            Padding(
-              padding: const EdgeInsets.only(bottom: 32),
-              child: Column(
-                children: [
-                  Opacity(
-                    opacity: 0.3,
-                    child: Image.asset(
-                      'assets/asgo_logo.jpeg',
-                      width: 64,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Associated Students \u00B7 SF State',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Color(0xFFD1D5DB),
-                    ),
-                  ),
-                ],
               ),
             ),
           ],

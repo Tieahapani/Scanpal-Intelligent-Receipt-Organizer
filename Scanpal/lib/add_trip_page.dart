@@ -947,14 +947,17 @@ class _TravelerPickerSheetState extends State<_TravelerPickerSheet> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.7,
-      ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboardHeight),
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1064,6 +1067,7 @@ class _TravelerPickerSheetState extends State<_TravelerPickerSheet> {
           const SizedBox(height: 16),
         ],
       ),
+    ),
     );
   }
 }
