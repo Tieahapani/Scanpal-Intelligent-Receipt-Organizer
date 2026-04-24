@@ -7,6 +7,7 @@ import 'receipt.dart';
 import 'api.dart';
 import 'auth_service.dart';
 import 'travel_calendar.dart';
+import 'location_autocomplete.dart';
 import 'receipt_detail_view_page.dart';
 
 class TripDetailPage extends StatefulWidget {
@@ -1928,7 +1929,10 @@ class _EditTripSheetState extends State<_EditTripSheet> {
                   // Destination
                   _fieldLabel('DESTINATION'),
                   const SizedBox(height: 5),
-                  _textField(_destCtrl, 'Enter destination'),
+                  LocationAutocomplete(
+                    controller: _destCtrl,
+                    hint: 'Enter destination',
+                  ),
                   const SizedBox(height: 14),
                   // Start / End Date
                   Row(

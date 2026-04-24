@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'api.dart';
 import 'auth_service.dart';
 import 'departments.dart';
+import 'location_autocomplete.dart';
 import 'travel_calendar.dart';
 
 class AddTripPage extends StatefulWidget {
@@ -198,8 +199,11 @@ class _AddTripPageState extends State<AddTripPage> {
                     // Destination
                     _fieldLabel('DESTINATION'),
                     const SizedBox(height: 6),
-                    _textField(_destCtrl, 'e.g. Los Angeles, CA',
-                        onChanged: (_) => setState(() {})),
+                    LocationAutocomplete(
+                      controller: _destCtrl,
+                      hint: 'e.g. Los Angeles, CA',
+                      onSelected: (_) => setState(() {}),
+                    ),
                     const SizedBox(height: 18),
                     // Department
                     _fieldLabel('DEPARTMENT', required: true),
