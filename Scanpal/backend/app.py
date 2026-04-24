@@ -1488,29 +1488,42 @@ Return ONLY valid JSON in this EXACT format (no markdown, no extra text):
                         except Exception as notion_err:
                             logging.error(f"Notion auto-write failed (receipt saved locally): {notion_err}")
 
-            # Notify admins about the new receipt
+            # Notify about the new receipt
             merchant_name = data.get("merchant") or "Unknown"
             amount_str = f"{detected_currency}{data.get('total', '?')}"
             trip_dest = ""
+            _trip = None
             if trip_id:
                 _trip = db.query(Trip).filter(Trip.id == trip_id).first()
                 if _trip:
                     trip_dest = _trip.destination or _trip.trip_purpose or ""
-            user = db.query(User).filter(User.email == g.user_email).first()
-            traveler_name = user.name if user else g.user_email
-            _notify_admins(
-                db, g.user_email,
-                title=f"{traveler_name} added a {amount_str} receipt from {merchant_name}",
-                message=f"{traveler_name} uploaded a {amount_str} receipt from {merchant_name} ({detected_category}){f' for {trip_dest}' if trip_dest else ''}.",
-                trip_id=trip_id,
-            )
-            _create_pending_review(
-                db, g.user_email, traveler_name,
-                title=f"{traveler_name} added a {amount_str} receipt from {merchant_name}",
-                review_type="receipt", action="uploaded",
-                trip_id=trip_id, receipt_id=receipt_id,
-                details=f"{amount_str} · {detected_category}{f' · {trip_dest}' if trip_dest else ''}",
-            )
+
+            if g.user_role != "admin":
+                user = db.query(User).filter(User.email == g.user_email).first()
+                traveler_name = user.name if user else g.user_email
+                _notify_admins(
+                    db, g.user_email,
+                    title=f"{traveler_name} added a {amount_str} receipt from {merchant_name}",
+                    message=f"{traveler_name} uploaded a {amount_str} receipt from {merchant_name} ({detected_category}){f' for {trip_dest}' if trip_dest else ''}.",
+                    trip_id=trip_id,
+                )
+                _create_pending_review(
+                    db, g.user_email, traveler_name,
+                    title=f"{traveler_name} added a {amount_str} receipt from {merchant_name}",
+                    review_type="receipt", action="uploaded",
+                    trip_id=trip_id, receipt_id=receipt_id,
+                    details=f"{amount_str} · {detected_category}{f' · {trip_dest}' if trip_dest else ''}",
+                )
+            elif _trip and _trip.traveler_email:
+                # Admin added a receipt to a traveler's trip — notify the traveler
+                traveler = db.query(User).filter(User.email == _trip.traveler_email).first()
+                first_name = ((traveler.name or "").split(" ")[0] if traveler else "") or "there"
+                _notify_traveler(
+                    db, _trip.traveler_email,
+                    title=f"Admin added a {amount_str} receipt from {merchant_name}",
+                    message=f"Hi {first_name}, the admin added a {amount_str} receipt from {merchant_name} ({detected_category}) to your trip {trip_dest}.",
+                    trip_id=trip_id,
+                )
 
             db.commit()
             data["receipt_id"] = receipt.id
