@@ -1055,6 +1055,15 @@ def create_trip():
                 review_type="trip", action="created",
                 trip_id=trip.id,
             )
+        else:
+            # Admin created a trip for a traveler — notify the traveler
+            first_name = (user.name or "").split(" ")[0] or "there"
+            _notify_traveler(
+                db, target_email,
+                title=f"Admin created a new trip for you — {dest}",
+                message=f"Hi {first_name}, the admin has created a new trip to {dest} for you.",
+                trip_id=trip.id,
+            )
 
         db.commit()
         db.refresh(trip)
@@ -2047,7 +2056,7 @@ def update_trip(trip_id):
                 else:
                     changes.append(f"{label} to '{new_v}'")
 
-        # Notify admins
+        # Notify admins or traveler
         if g.user_role != "admin":
             user = db.query(User).filter(User.email == g.user_email).first()
             traveler_name = user.name if user else g.user_email
@@ -2072,6 +2081,22 @@ def update_trip(trip_id):
                 title=title,
                 review_type="trip", action="updated",
                 trip_id=trip.id, details=details,
+            )
+        else:
+            # Admin edited a traveler's trip — notify the traveler
+            trip_label = trip.trip_purpose or trip.destination or "your trip"
+            traveler = db.query(User).filter(User.email == trip.traveler_email).first()
+            first_name = ((traveler.name or "").split(" ")[0] if traveler else "") or "there"
+            if changes:
+                change_str = ", ".join(changes)
+                msg = f"Hi {first_name}, the admin updated your trip {trip_label}: {change_str}."
+            else:
+                msg = f"Hi {first_name}, the admin made updates to your trip {trip_label}."
+            _notify_traveler(
+                db, trip.traveler_email,
+                title=f"Admin updated your trip — {trip_label}",
+                message=msg,
+                trip_id=trip.id,
             )
 
         db.commit()
@@ -2140,9 +2165,9 @@ def delete_trip(trip_id):
             except Exception as notion_err:
                 logging.error(f"Notion archive failed for trip {trip_id}: {notion_err}")
 
-        # Notify admins
+        # Notify admins or traveler
+        dest = trip.destination or trip.trip_purpose or "a trip"
         if g.user_role != "admin":
-            dest = trip.destination or trip.trip_purpose or "a trip"
             user = db.query(User).filter(User.email == g.user_email).first()
             traveler_name = user.name if user else g.user_email
             _notify_admins(
@@ -2155,6 +2180,16 @@ def delete_trip(trip_id):
                 db, g.user_email, traveler_name,
                 title=f"{traveler_name} deleted trip to {dest}",
                 review_type="trip", action="deleted",
+            )
+        else:
+            # Admin deleted a traveler's trip — notify the traveler
+            traveler = db.query(User).filter(User.email == trip.traveler_email).first()
+            first_name = ((traveler.name or "").split(" ")[0] if traveler else "") or "there"
+            _notify_traveler(
+                db, trip.traveler_email,
+                title=f"Admin deleted your trip to {dest}",
+                message=f"Hi {first_name}, the admin has removed your trip to {dest}.",
+                trip_id=None,
             )
 
         db.delete(trip)
@@ -2204,6 +2239,20 @@ def update_receipt(receipt_id):
             if mt and mt not in VALID_MEAL_TYPES:
                 return jsonify({"error": f"meal_type must be one of {VALID_MEAL_TYPES}"}), 400
             receipt.meal_type = mt or None
+
+        # Notify traveler about the edit
+        edit_fields = [k for k in ("merchant", "total", "category", "payment_method", "meal_type") if k in data]
+        merchant = receipt.merchant or "a receipt"
+        traveler = db.query(User).filter(User.email == receipt.user_id).first()
+        first_name = ((traveler.name or "").split(" ")[0] if traveler else "") or "there"
+        change_str = ", ".join(edit_fields)
+        trip_id = receipt.trip_id if receipt.trip_id and db.query(Trip).filter(Trip.id == receipt.trip_id).first() else None
+        _notify_traveler(
+            db, receipt.user_id,
+            title=f"Admin edited your receipt from {merchant}",
+            message=f"Hi {first_name}, the admin updated {change_str} on your receipt from {merchant}.",
+            trip_id=trip_id,
+        )
 
         db.commit()
         return jsonify(receipt.to_dict()), 200
@@ -2351,13 +2400,12 @@ def delete_receipt(receipt_id):
         if receipt.image_url:
             delete_file(receipt.image_url)
 
-        # Notify admins
+        # Notify admins or traveler
+        merchant = receipt.merchant or "a receipt"
+        valid_trip_id = receipt.trip_id if receipt.trip_id and db.query(Trip).filter(Trip.id == receipt.trip_id).first() else None
         if g.user_role != "admin":
             user = db.query(User).filter(User.email == g.user_email).first()
             traveler_name = user.name if user else g.user_email
-            merchant = receipt.merchant or "a receipt"
-            # Only pass trip_id if the trip actually exists in DB
-            valid_trip_id = receipt.trip_id if receipt.trip_id and db.query(Trip).filter(Trip.id == receipt.trip_id).first() else None
             _notify_admins(
                 db, g.user_email,
                 title=f"{traveler_name} deleted a receipt from {merchant}",
@@ -2368,6 +2416,16 @@ def delete_receipt(receipt_id):
                 db, g.user_email, traveler_name,
                 title=f"{traveler_name} deleted a receipt from {merchant}",
                 review_type="receipt", action="deleted",
+                trip_id=valid_trip_id,
+            )
+        else:
+            # Admin deleted a traveler's receipt — notify the traveler
+            traveler = db.query(User).filter(User.email == receipt.user_id).first()
+            first_name = ((traveler.name or "").split(" ")[0] if traveler else "") or "there"
+            _notify_traveler(
+                db, receipt.user_id,
+                title=f"Admin deleted your receipt from {merchant}",
+                message=f"Hi {first_name}, the admin removed your receipt from {merchant}.",
                 trip_id=valid_trip_id,
             )
 
@@ -2606,6 +2664,23 @@ def _notify_admins(db, traveler_email, title, message, trip_id=None, alert_type=
             status="inbox",
             admin_email=None,  # not admin-initiated
         ))
+    # caller is responsible for db.commit()
+
+
+def _notify_traveler(db, traveler_email, title, message, trip_id=None, alert_type="admin_action"):
+    """Create an alert for a traveler when admin makes changes."""
+    title = " ".join(title.split())
+    message = " ".join(message.split())
+    db.add(Alert(
+        id=str(uuid.uuid4()),
+        user_email=traveler_email,
+        trip_id=trip_id,
+        type=alert_type,
+        title=title,
+        message=message,
+        status="inbox",
+        admin_email=g.user_email,
+    ))
     # caller is responsible for db.commit()
 
 
