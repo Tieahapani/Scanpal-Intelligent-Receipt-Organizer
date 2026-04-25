@@ -372,7 +372,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
         if (mounted) {
           setState(() => _isUploading = false);
           final cat = (result.receipt.travelCategory ?? result.receipt.category ?? '').toLowerCase();
+          debugPrint('Meal type check: travelCategory=${result.receipt.travelCategory}, category=${result.receipt.category}, resolved=$cat');
           if (cat == 'meals') {
+            debugPrint('Showing meal type picker');
             _showMealTypePicker(result.receipt);
           }
         }

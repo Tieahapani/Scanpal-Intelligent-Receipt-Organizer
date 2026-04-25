@@ -2133,6 +2133,8 @@ def update_trip(trip_id):
                     notion_props["Travel Period "] = {"date": date_val}
                 if trip.travel_type:
                     notion_props["Travel Type"] = {"select": {"name": trip.travel_type}}
+                if trip.status:
+                    notion_props["Status"] = {"status": {"name": trip.status}}
                 logging.info(f"Notion sync props: {notion_props}")
                 if notion_props:
                     result = notion.update_page(trip.notion_page_id, notion_props)
