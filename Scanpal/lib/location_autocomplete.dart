@@ -53,7 +53,6 @@ class _LocationAutocompleteState extends State<LocationAutocomplete> {
   }
 
   void _onChanged(String query) {
-    debugPrint('LocationAutocomplete _onChanged: "$query"');
     if (_justSelected) {
       _justSelected = false;
       return;
@@ -67,7 +66,6 @@ class _LocationAutocompleteState extends State<LocationAutocomplete> {
   }
 
   Future<void> _search(String query) async {
-    debugPrint('LocationAutocomplete _search: "$query"');
     try {
       final uri = Uri.parse(
         'https://photon.komoot.io/api/?q=${Uri.encodeComponent(query)}&limit=5&lang=en',
@@ -75,12 +73,10 @@ class _LocationAutocompleteState extends State<LocationAutocomplete> {
       final res = await http.get(uri, headers: {
         'User-Agent': 'Finpal/1.0',
       }).timeout(const Duration(seconds: 5));
-      debugPrint('Photon response: ${res.statusCode}, body length: ${res.body.length}');
       if (res.statusCode != 200 || !mounted) return;
 
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       final features = data['features'] as List? ?? [];
-      debugPrint('Photon features count: ${features.length}');
 
       final places = <_Place>[];
       final seen = <String>{};
@@ -92,11 +88,9 @@ class _LocationAutocompleteState extends State<LocationAutocomplete> {
         }
       }
 
-      debugPrint('Parsed places: ${places.length}, mounted: $mounted');
       if (mounted) {
         _suggestions = places;
         if (places.isNotEmpty) {
-          debugPrint('Showing overlay with ${places.length} suggestions');
           _showOverlay();
         } else {
           _removeOverlay();

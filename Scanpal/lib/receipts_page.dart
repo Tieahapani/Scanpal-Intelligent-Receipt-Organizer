@@ -517,13 +517,14 @@ class _ReceiptsPageState extends State<ReceiptsPage> {
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
       child: GestureDetector(
         onTap: () async {
-            Navigator.push(
+            await Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => ReceiptDetailViewPage(
                 receipt: receipt,
                 trips: widget.trips,
               )),
             );
+            widget.onRefresh?.call();
         },
         child: Container(
           padding: const EdgeInsets.all(14),

@@ -175,7 +175,7 @@ class _ReceiptDetailViewPageState extends State<ReceiptDetailViewPage> {
       await _api.deleteReceipt(receipt.id);
       if (!mounted) return;
       _showToast('Receipt deleted');
-      Navigator.pop(context);
+      Navigator.pop(context, 'deleted');
     } catch (e) {
       if (mounted) _showToast('Failed to delete: $e', isError: true);
     }

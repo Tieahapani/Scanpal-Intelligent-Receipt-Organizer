@@ -55,6 +55,27 @@ class _AdminTravelerDetailPageState extends State<AdminTravelerDetailPage> {
     super.dispose();
   }
 
+  Future<void> _reloadData() async {
+    try {
+      final trips = await _api.fetchTrips(sync: false);
+      final travelerTrips = trips.where(
+        (t) => t.travelerEmail == widget.traveler.email,
+      ).toList();
+      final receipts = await _api.fetchReceipts();
+      final travelerReceipts = receipts.where(
+        (r) => travelerTrips.any((t) => t.id.toString() == r.tripId),
+      ).toList();
+      if (mounted) {
+        setState(() {
+          _trips = travelerTrips;
+          _receipts = travelerReceipts;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to reload traveler data: $e');
+    }
+  }
+
   // ─── Filtering & Sorting ───────────────────────────────
 
   List<Receipt> get _filteredReceipts {
@@ -537,8 +558,8 @@ class _AdminTravelerDetailPageState extends State<AdminTravelerDetailPage> {
         : const Color(0xFFE8A824);
     final category = receipt.category ?? receipt.travelCategory ?? 'Other';
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => ReceiptDetailViewPage(
@@ -547,6 +568,8 @@ class _AdminTravelerDetailPageState extends State<AdminTravelerDetailPage> {
             ),
           ),
         );
+        _reloadData();
+        widget.onRefresh?.call();
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
@@ -719,11 +742,13 @@ class _AdminTravelerDetailPageState extends State<AdminTravelerDetailPage> {
     final receiptCount = _receipts.where((r) => r.tripId == trip.id.toString()).length;
 
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => TripDetailPage(trip: trip)),
         );
+        _reloadData();
+        widget.onRefresh?.call();
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
