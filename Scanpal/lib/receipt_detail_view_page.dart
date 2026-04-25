@@ -904,10 +904,12 @@ class _TopToastState extends State<_TopToast> with SingleTickerProviderStateMixi
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  color: widget.isError ? const Color(0xFFFEE2E2) : const Color(0xFFECFDF5),
+                  color: widget.isError ? const Color(0xFFFEE2E2) : const Color(0xFFF5EFFE),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: widget.isError ? const Color(0xFFFCA5A5) : const Color(0xFF6EE7B7),
+                    color: widget.isError
+                        ? const Color(0xFFFCA5A5)
+                        : const Color(0xFF46166B).withValues(alpha: 0.25),
                     width: 0.5,
                   ),
                   boxShadow: [
@@ -926,14 +928,14 @@ class _TopToastState extends State<_TopToast> with SingleTickerProviderStateMixi
                       decoration: BoxDecoration(
                         color: widget.isError
                             ? const Color(0xFFDC2626).withValues(alpha: 0.1)
-                            : const Color(0xFF059669).withValues(alpha: 0.1),
+                            : const Color(0xFF46166B).withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
                       child: Icon(
                         widget.isError ? Icons.error_outline : Icons.check_circle_outline,
                         size: 18,
-                        color: widget.isError ? const Color(0xFFDC2626) : const Color(0xFF059669),
+                        color: widget.isError ? const Color(0xFFDC2626) : const Color(0xFF46166B),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -943,7 +945,7 @@ class _TopToastState extends State<_TopToast> with SingleTickerProviderStateMixi
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: widget.isError ? const Color(0xFF991B1B) : const Color(0xFF065F46),
+                          color: widget.isError ? const Color(0xFF991B1B) : const Color(0xFF46166B),
                         ),
                       ),
                     ),
@@ -954,7 +956,7 @@ class _TopToastState extends State<_TopToast> with SingleTickerProviderStateMixi
                         size: 16,
                         color: widget.isError
                             ? const Color(0xFF991B1B).withValues(alpha: 0.5)
-                            : const Color(0xFF065F46).withValues(alpha: 0.5),
+                            : const Color(0xFF46166B).withValues(alpha: 0.4),
                       ),
                     ),
                   ],

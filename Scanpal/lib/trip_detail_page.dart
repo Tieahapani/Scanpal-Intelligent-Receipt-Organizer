@@ -181,7 +181,7 @@ class _TripDetailPageState extends State<TripDetailPage> {
         trip: _trip,
         onSaved: (updatedTrip) {
           setState(() => _trip = updatedTrip);
-          _refreshTrip(); // also refresh from server for full data
+          _showToast('Changes saved successfully');
         },
       ),
     );
@@ -358,7 +358,7 @@ class _TripDetailPageState extends State<TripDetailPage> {
           child: Row(
             children: [
               GestureDetector(
-                onTap: () => Navigator.pop(context),
+                onTap: () => Navigator.pop(context, _trip),
                 child: Container(
                   width: 36,
                   height: 36,
@@ -1775,9 +1775,25 @@ class _EditTripSheetState extends State<_EditTripSheet> {
   DateTime? _startDate;
   DateTime? _endDate;
   String _category = 'Conference';
+  String? _tripStatus;
   bool _saving = false;
 
   static const _categories = ['Conference', 'Advocacy', 'Meeting', 'Retreat', 'Workshop', 'Other'];
+
+  static const _statuses = [
+    'No ODTA Submitted',
+    'ODTA Processed',
+    'No TAAR Submitted',
+    'TAAR Sent (Pending Review)',
+    'TAAR Reviewed',
+    'TAAR Correction Needed',
+    'TAAR Processed (Approved)',
+    'TC Sent (Pending Review)',
+    'TC Correction Needed',
+    'TC Reviewed',
+    'TC Processed',
+    'Cancelled',
+  ];
 
   @override
   void initState() {
@@ -1797,6 +1813,7 @@ class _EditTripSheetState extends State<_EditTripSheet> {
     _startDate = t.departureDate;
     _endDate = t.returnDate;
     _category = t.category ?? _inferCategory(t.tripPurpose);
+    _tripStatus = t.status;
   }
 
   String _inferCategory(String? purpose) {
@@ -1842,6 +1859,7 @@ class _EditTripSheetState extends State<_EditTripSheet> {
         'departure_date': _startDate?.toIso8601String(),
         'return_date': _endDate?.toIso8601String(),
         'category': _category,
+        'status': _tripStatus,
         'description': _descCtrl.text.trim(),
         'travelers': _selectedTravelers.map((t) => t['email']).join(','),
       };
@@ -1990,6 +2008,38 @@ class _EditTripSheetState extends State<_EditTripSheet> {
                             cat,
                             style: TextStyle(
                               fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: selected ? Colors.white : const Color(0xFF4B5563),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  // Trip Status
+                  _fieldLabel('TRIP STATUS'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _statuses.map((status) {
+                      final selected = _tripStatus == status;
+                      return GestureDetector(
+                        onTap: () => setState(() => _tripStatus = selected ? null : status),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: selected ? const Color(0xFF46166B) : Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: selected ? const Color(0xFF46166B) : Colors.grey.shade300,
+                            ),
+                          ),
+                          child: Text(
+                            status,
+                            style: TextStyle(
+                              fontSize: 11,
                               fontWeight: FontWeight.w500,
                               color: selected ? Colors.white : const Color(0xFF4B5563),
                             ),
@@ -2400,10 +2450,12 @@ class _TopToastState extends State<_TopToast> with SingleTickerProviderStateMixi
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  color: widget.isError ? const Color(0xFFFEE2E2) : const Color(0xFFECFDF5),
+                  color: widget.isError ? const Color(0xFFFEE2E2) : const Color(0xFFF5EFFE),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: widget.isError ? const Color(0xFFFCA5A5) : const Color(0xFF6EE7B7),
+                    color: widget.isError
+                        ? const Color(0xFFFCA5A5)
+                        : const Color(0xFF46166B).withValues(alpha: 0.25),
                     width: 0.5,
                   ),
                   boxShadow: [
@@ -2422,14 +2474,14 @@ class _TopToastState extends State<_TopToast> with SingleTickerProviderStateMixi
                       decoration: BoxDecoration(
                         color: widget.isError
                             ? const Color(0xFFDC2626).withValues(alpha: 0.1)
-                            : const Color(0xFF059669).withValues(alpha: 0.1),
+                            : const Color(0xFF46166B).withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
                       child: Icon(
                         widget.isError ? Icons.error_outline : Icons.check_circle_outline,
                         size: 18,
-                        color: widget.isError ? const Color(0xFFDC2626) : const Color(0xFF059669),
+                        color: widget.isError ? const Color(0xFFDC2626) : const Color(0xFF46166B),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -2439,7 +2491,7 @@ class _TopToastState extends State<_TopToast> with SingleTickerProviderStateMixi
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: widget.isError ? const Color(0xFF991B1B) : const Color(0xFF065F46),
+                          color: widget.isError ? const Color(0xFF991B1B) : const Color(0xFF46166B),
                         ),
                       ),
                     ),
@@ -2450,7 +2502,7 @@ class _TopToastState extends State<_TopToast> with SingleTickerProviderStateMixi
                         size: 16,
                         color: widget.isError
                             ? const Color(0xFF991B1B).withValues(alpha: 0.5)
-                            : const Color(0xFF065F46).withValues(alpha: 0.5),
+                            : const Color(0xFF46166B).withValues(alpha: 0.4),
                       ),
                     ),
                   ],

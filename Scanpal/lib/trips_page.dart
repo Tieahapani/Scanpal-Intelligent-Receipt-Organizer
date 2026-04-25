@@ -35,6 +35,14 @@ class _TripsPageState extends State<TripsPage> {
   int _pickerYear = 2026;
   String? _selectedDepartment;
   List<Department> _departments = [];
+  late List<Trip> _localTrips;
+
+  void _updateLocalTrip(Trip updated) {
+    setState(() {
+      final i = _localTrips.indexWhere((t) => t.id == updated.id);
+      if (i != -1) _localTrips[i] = updated;
+    });
+  }
 
   static const _months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -51,11 +59,20 @@ class _TripsPageState extends State<TripsPage> {
   @override
   void initState() {
     super.initState();
+    _localTrips = List.from(widget.trips);
     final now = DateTime.now();
     _selectedMonth = now.month - 1;
     _selectedYear = now.year;
     _pickerYear = now.year;
     _fetchDepartments();
+  }
+
+  @override
+  void didUpdateWidget(TripsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.trips != widget.trips) {
+      setState(() => _localTrips = List.from(widget.trips));
+    }
   }
 
   Future<void> _fetchDepartments() async {
@@ -101,7 +118,7 @@ class _TripsPageState extends State<TripsPage> {
   List<String> get _availableDepartments {
     if (_departments.isNotEmpty) return _departments.map((d) => d.name).toList();
     // Fallback: derive from trips if API hasn't responded yet
-    return widget.trips
+    return _localTrips
         .map((t) => t.department)
         .whereType<String>()
         .where((d) => d.trim().isNotEmpty)
@@ -111,7 +128,7 @@ class _TripsPageState extends State<TripsPage> {
   }
 
   List<Trip> get _filteredTrips {
-    return widget.trips.where((t) {
+    return _localTrips.where((t) {
       if (t.departureDate != null) {
         if (t.departureDate!.month - 1 != _selectedMonth ||
             t.departureDate!.year != _selectedYear) {
@@ -293,7 +310,7 @@ class _TripsPageState extends State<TripsPage> {
                       ),
                     ),
                     Text(
-                      '${widget.trips.length} total trips',
+                      '${_localTrips.length} total trips',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w400,
@@ -940,10 +957,11 @@ class _TripsPageState extends State<TripsPage> {
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
       child: GestureDetector(
         onTap: () async {
-          await Navigator.push(
+          final updated = await Navigator.push<Trip>(
             context,
             MaterialPageRoute(builder: (_) => TripDetailPage(trip: trip)),
           );
+          if (updated != null) _updateLocalTrip(updated);
           widget.onRefresh?.call();
         },
         child: Container(
