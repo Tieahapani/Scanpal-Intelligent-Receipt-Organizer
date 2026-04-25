@@ -2587,7 +2587,7 @@ def admin_travelers():
     db = SessionLocal()
     try:
         today = datetime.utcnow().date()
-        users = db.query(User).filter(User.role == "traveler").all()
+        users = db.query(User).all()
         result = []
         for user in users:
             all_user_trips = db.query(Trip).filter(
