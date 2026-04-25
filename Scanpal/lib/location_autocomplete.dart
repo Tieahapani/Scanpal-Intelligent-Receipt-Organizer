@@ -53,6 +53,7 @@ class _LocationAutocompleteState extends State<LocationAutocomplete> {
   }
 
   void _onChanged(String query) {
+    debugPrint('LocationAutocomplete _onChanged: "$query"');
     if (_justSelected) {
       _justSelected = false;
       return;
@@ -66,15 +67,20 @@ class _LocationAutocompleteState extends State<LocationAutocomplete> {
   }
 
   Future<void> _search(String query) async {
+    debugPrint('LocationAutocomplete _search: "$query"');
     try {
       final uri = Uri.parse(
         'https://photon.komoot.io/api/?q=${Uri.encodeComponent(query)}&limit=5&lang=en',
       );
-      final res = await http.get(uri).timeout(const Duration(seconds: 5));
+      final res = await http.get(uri, headers: {
+        'User-Agent': 'Finpal/1.0',
+      }).timeout(const Duration(seconds: 5));
+      debugPrint('Photon response: ${res.statusCode}, body length: ${res.body.length}');
       if (res.statusCode != 200 || !mounted) return;
 
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       final features = data['features'] as List? ?? [];
+      debugPrint('Photon features count: ${features.length}');
 
       final places = <_Place>[];
       final seen = <String>{};
@@ -86,15 +92,19 @@ class _LocationAutocompleteState extends State<LocationAutocomplete> {
         }
       }
 
+      debugPrint('Parsed places: ${places.length}, mounted: $mounted');
       if (mounted) {
         _suggestions = places;
         if (places.isNotEmpty) {
+          debugPrint('Showing overlay with ${places.length} suggestions');
           _showOverlay();
         } else {
           _removeOverlay();
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Location search error: $e');
+    }
   }
 
   void _onSelect(_Place place) {
@@ -105,11 +115,17 @@ class _LocationAutocompleteState extends State<LocationAutocomplete> {
     _removeOverlay();
   }
 
+  double _getFieldWidth() {
+    final box = context.findRenderObject() as RenderBox?;
+    return box?.size.width ?? 300;
+  }
+
   void _showOverlay() {
     _removeOverlay();
-    _overlayEntry = OverlayEntry(builder: (context) {
+    final width = _getFieldWidth();
+    _overlayEntry = OverlayEntry(builder: (_) {
       return Positioned(
-        width: context.findRenderObject() != null ? (context.findRenderObject() as RenderBox).size.width : 300,
+        width: width,
         child: CompositedTransformFollower(
           link: _layerLink,
           offset: const Offset(0, 52),
@@ -229,16 +245,12 @@ class _Place {
     final city = props['city'] ?? '';
     final state = props['state'] ?? '';
     final country = props['country'] ?? '';
-    // Build display name: "City, State, Country"
-    final parts = <String>[];
-    if (name.isNotEmpty) parts.add(name);
 
-    // If name is same as city, don't repeat
+    // Subtitle: city, state, country (excluding name duplicates)
     final subtitleParts = <String>[];
     if (city.isNotEmpty && city != name) subtitleParts.add(city);
     if (state.isNotEmpty && state != name && state != city) subtitleParts.add(state);
     if (country.isNotEmpty) subtitleParts.add(country);
-
     final subtitle = subtitleParts.join(', ');
 
     // Full display for the text field

@@ -261,6 +261,8 @@ def init_db():
     with engine.begin() as conn:
         if "added_by" not in receipt_cols:
             conn.execute(text("ALTER TABLE receipts ADD COLUMN added_by VARCHAR(20) DEFAULT 'traveler'"))
+        if "notion_sync_pending" not in receipt_cols:
+            conn.execute(text("ALTER TABLE receipts ADD COLUMN notion_sync_pending BOOLEAN DEFAULT FALSE"))
 
     # Users table migrations
     user_cols = {c["name"] for c in insp.get_columns("users")}
