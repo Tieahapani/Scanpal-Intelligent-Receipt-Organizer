@@ -1442,7 +1442,7 @@ Return ONLY valid JSON in this EXACT format (no markdown, no extra text):
         gemini_merchant = None
 
         try:
-            response = gemini_call_with_retry("gemini-2.0-flash", prompt)
+            response = gemini_call_with_retry("gemini-2.5-flash", prompt)
             text = response.text.strip()
             if "```json" in text:
                 text = text.split("```json")[1].split("```")[0].strip()
