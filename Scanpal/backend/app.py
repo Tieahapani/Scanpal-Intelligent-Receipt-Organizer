@@ -17,7 +17,7 @@ import google.api_core.exceptions
 
 from models import SessionLocal, User, Trip, Receipt, OtpCode, Alert, PendingReview, init_db, engine
 from notion_service import NotionService
-from auth import create_token, decode_token, require_auth, require_admin, is_admin_email, ADMIN_EMAILS, JWT_SECRET, JWT_ALGORITHM
+from auth import create_token, decode_token, require_auth, require_admin, is_admin_email, JWT_SECRET, JWT_ALGORITHM
 import jwt
 from azure_ocr import analyze_receipt_azure
 from email_utils import send_otp_email
@@ -2692,16 +2692,16 @@ def search_users():
 # =============================================================================
 
 def _notify_admins(db, traveler_email, title, message, trip_id=None, alert_type="traveler_action"):
-    """Create an alert for every admin so they see traveler activity in real-time."""
-    # Clean up extra whitespace from names
+    """Create an alert for users currently logged in as admin (role='admin' in DB)."""
     title = " ".join(title.split())
     message = " ".join(message.split())
-    for admin_email in ADMIN_EMAILS:
-        if admin_email == traveler_email:
+    admins = db.query(User).filter(User.role == "admin").all()
+    for admin in admins:
+        if admin.email == traveler_email:
             continue  # don't notify yourself
         db.add(Alert(
             id=str(uuid.uuid4()),
-            user_email=admin_email,
+            user_email=admin.email,
             trip_id=trip_id,
             type=alert_type,
             title=title,
@@ -3302,14 +3302,15 @@ def trigger_alert_generation():
 def _create_pending_review(db, traveler_email, traveler_name, title,
                            review_type="trip", action="created",
                            trip_id=None, receipt_id=None, details=None):
-    """Create a pending review for every admin."""
+    """Create a pending review for users currently logged in as admin (role='admin' in DB)."""
     title = " ".join(title.split())  # clean whitespace
-    for admin_email in ADMIN_EMAILS:
-        if admin_email == traveler_email:
+    admins = db.query(User).filter(User.role == "admin").all()
+    for admin in admins:
+        if admin.email == traveler_email:
             continue
         db.add(PendingReview(
             id=str(uuid.uuid4()),
-            admin_email=admin_email,
+            admin_email=admin.email,
             traveler_email=traveler_email,
             traveler_name=traveler_name.strip(),
             trip_id=trip_id,
