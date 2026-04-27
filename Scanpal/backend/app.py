@@ -6,7 +6,6 @@ import secrets
 import bcrypt
 import threading
 import time
-import random
 from datetime import datetime, timezone, timedelta
 
 from flask import Flask, request, jsonify, g, Response
@@ -66,8 +65,27 @@ with engine.connect() as conn:
         conn.commit()
         logging.info("Added payment_method column to receipts table")
 
-# Configure Gemini
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+# Configure Gemini with API key rotation
+_gemini_api_keys = [os.environ["GEMINI_API_KEY"]]
+for i in range(2, 10):
+    key = os.environ.get(f"GEMINI_API_KEY_{i}")
+    if key:
+        _gemini_api_keys.append(key)
+logging.info(f"Loaded {len(_gemini_api_keys)} Gemini API key(s)")
+_gemini_key_index = 0
+_gemini_key_lock = threading.Lock()
+
+
+def _next_gemini_key():
+    """Round-robin through available Gemini API keys."""
+    global _gemini_key_index
+    with _gemini_key_lock:
+        key = _gemini_api_keys[_gemini_key_index % len(_gemini_api_keys)]
+        _gemini_key_index += 1
+        return key
+
+
+genai.configure(api_key=_gemini_api_keys[0])
 
 
 # ─── Gemini Rate Limiter & Retry Logic (Google ADK pattern) ──────────────
@@ -104,52 +122,44 @@ _gemini_limiter = GeminiRateLimiter(
 )
 
 
-def gemini_call_with_retry(model, content, generation_config=None,
-                           max_retries=3, initial_delay=2.0, max_delay=8.0):
-    """Call Gemini with exponential backoff, jitter, and rate limiting.
+def gemini_call_with_retry(model_name, content, generation_config=None,
+                           max_retries=2):
+    """Call Gemini with key rotation and minimal delay.
 
-    Each attempt (including retries) acquires a rate limiter token first,
-    so retries are properly spaced at the configured RPM.
-    - max_retries=3, delays capped at 8s to stay within gunicorn worker timeout
-    - Full jitter: random(delay/2, delay) to avoid thundering herd
-    - Retries on 429 (ResourceExhausted) and 503 (ServiceUnavailable)
+    Tries each API key up to max_retries times (total = max_retries × num_keys).
+    Since switching keys is the main fix for 429s, delays are kept short (1s).
+    With 3 keys × 2 retries = 6 attempts, worst case ~6s before giving up.
     """
-    delay = initial_delay
     last_err = None
+    total_attempts = max_retries * len(_gemini_api_keys)
 
-    for attempt in range(max_retries):
+    for attempt in range(total_attempts):
+        # Rotate API key each attempt
+        api_key = _next_gemini_key()
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name)
+
         if not _gemini_limiter.acquire(timeout=15):
             raise Exception("Rate limit queue timeout — too many concurrent requests")
         try:
             kwargs = {"generation_config": generation_config} if generation_config else {}
             response = model.generate_content(content, **kwargs)
-            logging.info(f"Gemini call SUCCESS (attempt {attempt + 1}/{max_retries})")
+            logging.info(f"Gemini call SUCCESS (attempt {attempt + 1}/{total_attempts}, key {(attempt % len(_gemini_api_keys)) + 1})")
             return response
         except google.api_core.exceptions.ResourceExhausted as e:
             last_err = e
-            if attempt == max_retries - 1:
-                break
-            jittered = random.uniform(delay / 2, delay)
-            logging.warning(
-                f"Gemini 429, retry {attempt + 1}/{max_retries} in {jittered:.1f}s "
-                f"(base delay {delay:.0f}s)"
-            )
-            time.sleep(jittered)
-            delay = min(delay * 2, max_delay)
+            logging.warning(f"Gemini 429 on key {(attempt % len(_gemini_api_keys)) + 1}, attempt {attempt + 1}/{total_attempts}")
+            if attempt < total_attempts - 1:
+                time.sleep(1)
         except google.api_core.exceptions.ServiceUnavailable as e:
             last_err = e
-            if attempt == max_retries - 1:
-                break
-            jittered = random.uniform(delay / 2, delay)
-            logging.warning(
-                f"Gemini 503, retry {attempt + 1}/{max_retries} in {jittered:.1f}s"
-            )
-            time.sleep(jittered)
-            delay = min(delay * 2, max_delay)
+            logging.warning(f"Gemini 503, attempt {attempt + 1}/{total_attempts}")
+            if attempt < total_attempts - 1:
+                time.sleep(1)
         except Exception:
             raise
 
-    logging.error(f"Gemini exhausted after {max_retries} retries: {last_err}")
+    logging.error(f"Gemini exhausted after {total_attempts} attempts across {len(_gemini_api_keys)} keys: {last_err}")
     raise last_err
 
 
@@ -1426,17 +1436,13 @@ Return ONLY valid JSON in this EXACT format (no markdown, no extra text):
 """
 
         # Step 2: Gemini — currency + travel category + merchant fallback
-        # Use tight retry limits (max ~14s total sleep) so we never approach the gunicorn timeout.
         # If Gemini is rate-limited, fall back to safe defaults so the receipt still saves.
         detected_currency = "$"
         detected_category = "Other AS Cost"
         gemini_merchant = None
 
-        model = genai.GenerativeModel("gemini-2.0-flash")
         try:
-            response = gemini_call_with_retry(
-                model, prompt, max_retries=2, initial_delay=2.0, max_delay=8.0
-            )
+            response = gemini_call_with_retry("gemini-2.0-flash", prompt)
             text = response.text.strip()
             if "```json" in text:
                 text = text.split("```json")[1].split("```")[0].strip()
