@@ -232,6 +232,7 @@ class OtpCode(Base):
     name = Column(String, nullable=True)           # stored for registration flow
     department = Column(String, nullable=True)     # stored for registration flow
     pending_password = Column(String, nullable=True)  # password to save after OTP verify
+    requested_role = Column(String(20), nullable=True)  # "admin" or "traveler" — role user selected at login
     attempts = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -280,3 +281,10 @@ def init_db():
                 conn.execute(text("ALTER TABLE alerts ADD COLUMN admin_email VARCHAR"))
             if "title" not in alert_cols:
                 conn.execute(text("ALTER TABLE alerts ADD COLUMN title VARCHAR NOT NULL DEFAULT ''"))
+
+    # OTP codes table migrations
+    if "otp_codes" in insp.get_table_names():
+        otp_cols = {c["name"] for c in insp.get_columns("otp_codes")}
+        with engine.begin() as conn:
+            if "requested_role" not in otp_cols:
+                conn.execute(text("ALTER TABLE otp_codes ADD COLUMN requested_role VARCHAR(20)"))

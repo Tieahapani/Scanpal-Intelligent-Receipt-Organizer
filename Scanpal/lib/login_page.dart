@@ -88,6 +88,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         _emailCtrl.text.trim(),
         rememberMe: _rememberMe,
         password: password.isNotEmpty ? password : null,
+        requestedRole: _isAdminLogin ? 'admin' : 'traveler',
       );
 
       if (!mounted) return;

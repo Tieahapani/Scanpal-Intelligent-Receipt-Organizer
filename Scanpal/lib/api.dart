@@ -132,6 +132,7 @@ class APIService {
     String? name,
     String? department,
     String? departmentId,
+    String? requestedRole,
   }) async {
     final uri = Uri.parse('$baseUrl/auth/login');
     debugPrint('POST $uri');
@@ -144,6 +145,7 @@ class APIService {
     if (name != null) body['name'] = name;
     if (department != null) body['department'] = department;
     if (departmentId != null) body['department_id'] = departmentId;
+    if (requestedRole != null) body['requested_role'] = requestedRole;
 
     final res = await http
         .post(uri,

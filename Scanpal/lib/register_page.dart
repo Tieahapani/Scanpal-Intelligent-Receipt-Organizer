@@ -94,6 +94,7 @@ class _RegisterPageState extends State<RegisterPage> {
         name: _nameCtrl.text.trim(),
         department: _selectedDepartment?.name,
         departmentId: _selectedDepartment?.code,
+        requestedRole: _isAdmin ? 'admin' : 'traveler',
       );
 
       if (!mounted) return;

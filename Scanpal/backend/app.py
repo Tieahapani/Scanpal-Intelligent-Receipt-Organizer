@@ -152,6 +152,25 @@ def gemini_call_with_retry(model, content, generation_config=None,
 # Initialize Notion service
 notion = NotionService()
 
+# Email that is always admin — cannot log in as traveler
+SUPER_ADMIN_EMAIL = "c130businessoffice@asi.sfsu.edu"
+
+
+def resolve_role(email, requested_role=None):
+    """Determine the user's role based on email and requested role.
+
+    Admin emails can choose to log in as traveler, except SUPER_ADMIN_EMAIL.
+    Non-admin emails are always traveler.
+    """
+    if not is_admin_email(email):
+        return "traveler"
+    if email.lower().strip() == SUPER_ADMIN_EMAIL:
+        return "admin"
+    if requested_role == "traveler":
+        return "traveler"
+    return "admin"
+
+
 # Travel-specific expense categories
 TRAVEL_CATEGORIES = [
     "Accommodation Cost",
@@ -201,6 +220,7 @@ def login():
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
     remember_me = data.get("remember_me", False)
+    requested_role = (data.get("requested_role") or "").strip().lower() or None
 
     if not email:
         return jsonify({"error": "Email is required"}), 400
@@ -220,7 +240,7 @@ def login():
 
             # Password correct — check if user is remembered (skip OTP)
             if user.remembered:
-                user.role = "admin" if is_admin_email(email) else user.role
+                user.role = resolve_role(email, requested_role)
                 try:
                     _sync_trips_from_notion(db, email)
                 except Exception as sync_err:
@@ -284,6 +304,7 @@ def login():
             name=otp_name,
             department=otp_dept,
             pending_password=pending_pw_hash,
+            requested_role=requested_role,
             attempts=0,
         )
         db.add(otp)
@@ -357,6 +378,7 @@ def verify_otp():
         otp_name = otp.name
         otp_department = otp.department
         otp_pending_password = otp.pending_password
+        otp_requested_role = otp.requested_role
         db.delete(otp)
 
         # Create or fetch the user
@@ -368,13 +390,12 @@ def verify_otp():
                 notion_rows = notion.get_rows_by_email(email)
                 if notion_rows:
                     parsed = notion.parse_notion_row(notion_rows[0])
-                    role = "admin" if is_admin_email(email) else "traveler"
                     user = User(
                         id=str(uuid.uuid4()),
                         email=email,
                         name=parsed.get("traveler_name") or email.split("@")[0],
                         department=parsed.get("department"),
-                        role=role,
+                        role=resolve_role(email, otp_requested_role),
                     )
                     db.add(user)
                     db.commit()
@@ -382,13 +403,12 @@ def verify_otp():
                     _sync_trips_from_notion(db, email)
                 else:
                     # Notion data removed since login — use stored OTP data
-                    role = "admin" if is_admin_email(email) else "traveler"
                     user = User(
                         id=str(uuid.uuid4()),
                         email=email,
                         name=otp_name or email.split("@")[0],
                         department=otp_department,
-                        role=role,
+                        role=resolve_role(email, otp_requested_role),
                     )
                     db.add(user)
                     db.commit()
@@ -396,20 +416,19 @@ def verify_otp():
 
             elif otp_purpose == "register":
                 # Self-registration
-                role = "admin" if is_admin_email(email) else "traveler"
                 user = User(
                     id=str(uuid.uuid4()),
                     email=email,
                     name=otp_name or email.split("@")[0],
                     department=otp_department,
-                    role=role,
+                    role=resolve_role(email, otp_requested_role),
                 )
                 db.add(user)
                 db.commit()
                 db.refresh(user)
         else:
             # Existing user login — update role, sync trips
-            user.role = "admin" if is_admin_email(email) else user.role
+            user.role = resolve_role(email, otp_requested_role)
             try:
                 _sync_trips_from_notion(db, email)
             except Exception as sync_err:
