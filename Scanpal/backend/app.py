@@ -105,12 +105,12 @@ _gemini_limiter = GeminiRateLimiter(
 
 
 def gemini_call_with_retry(model, content, generation_config=None,
-                           max_retries=5, initial_delay=4.0, max_delay=60.0):
+                           max_retries=3, initial_delay=2.0, max_delay=8.0):
     """Call Gemini with exponential backoff, jitter, and rate limiting.
 
     Each attempt (including retries) acquires a rate limiter token first,
     so retries are properly spaced at the configured RPM.
-    - Initial delay: 4s (safe for 15 RPM = 1 req every 4s)
+    - max_retries=3, delays capped at 8s to stay within gunicorn worker timeout
     - Full jitter: random(delay/2, delay) to avoid thundering herd
     - Retries on 429 (ResourceExhausted) and 503 (ServiceUnavailable)
     """
@@ -118,7 +118,7 @@ def gemini_call_with_retry(model, content, generation_config=None,
     last_err = None
 
     for attempt in range(max_retries):
-        if not _gemini_limiter.acquire(timeout=60):
+        if not _gemini_limiter.acquire(timeout=15):
             raise Exception("Rate limit queue timeout — too many concurrent requests")
         try:
             kwargs = {"generation_config": generation_config} if generation_config else {}
@@ -127,6 +127,8 @@ def gemini_call_with_retry(model, content, generation_config=None,
             return response
         except google.api_core.exceptions.ResourceExhausted as e:
             last_err = e
+            if attempt == max_retries - 1:
+                break
             jittered = random.uniform(delay / 2, delay)
             logging.warning(
                 f"Gemini 429, retry {attempt + 1}/{max_retries} in {jittered:.1f}s "
@@ -136,6 +138,8 @@ def gemini_call_with_retry(model, content, generation_config=None,
             delay = min(delay * 2, max_delay)
         except google.api_core.exceptions.ServiceUnavailable as e:
             last_err = e
+            if attempt == max_retries - 1:
+                break
             jittered = random.uniform(delay / 2, delay)
             logging.warning(
                 f"Gemini 503, retry {attempt + 1}/{max_retries} in {jittered:.1f}s"
@@ -1430,7 +1434,7 @@ Return ONLY valid JSON in this EXACT format (no markdown, no extra text):
             return jsonify({"error": "AI service unavailable"}), 503
         except Exception as gemini_err:
             logging.error(f"GEMINI ERROR: {gemini_err}")
-            raise
+            return jsonify({"error": "Expense parse failed. Please try again."}), 500
 
         text = response.text.strip()
 
