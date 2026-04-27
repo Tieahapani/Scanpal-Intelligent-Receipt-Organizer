@@ -1425,39 +1425,38 @@ Return ONLY valid JSON in this EXACT format (no markdown, no extra text):
 }}
 """
 
+        # Step 2: Gemini — currency + travel category + merchant fallback
+        # Use tight retry limits (max ~14s total sleep) so we never approach the gunicorn timeout.
+        # If Gemini is rate-limited, fall back to safe defaults so the receipt still saves.
+        detected_currency = "$"
+        detected_category = "Other AS Cost"
+        gemini_merchant = None
+
         model = genai.GenerativeModel("gemini-2.0-flash")
         try:
-            response = gemini_call_with_retry(model, prompt)
-        except google.api_core.exceptions.ResourceExhausted:
-            return jsonify({"error": "AI service is busy. Please try again in a moment."}), 429
-        except google.api_core.exceptions.ServiceUnavailable:
-            return jsonify({"error": "AI service unavailable"}), 503
+            response = gemini_call_with_retry(
+                model, prompt, max_retries=2, initial_delay=2.0, max_delay=8.0
+            )
+            text = response.text.strip()
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0].strip()
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0].strip()
+            gemini_result = json.loads(text)
+
+            c = gemini_result.get("currency", "$")
+            if c in ["$", "₹", "€", "£"]:
+                detected_currency = c
+            cat = gemini_result.get("travel_category", "Other AS Cost")
+            if cat in TRAVEL_CATEGORIES:
+                detected_category = cat
+            gemini_merchant = (gemini_result.get("merchant_name") or "").strip() or None
+        except (google.api_core.exceptions.ResourceExhausted,
+                google.api_core.exceptions.ServiceUnavailable) as gemini_err:
+            logging.warning(f"Gemini rate-limited ({gemini_err}); receipt will save with default category.")
         except Exception as gemini_err:
-            logging.error(f"GEMINI ERROR: {gemini_err}")
-            return jsonify({"error": "Expense parse failed. Please try again."}), 500
+            logging.error(f"Gemini categorization failed ({gemini_err}); receipt will save with default category.")
 
-        text = response.text.strip()
-
-        # Parse JSON (handle markdown code blocks)
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0].strip()
-
-        gemini_result = json.loads(text)
-
-        # Validate currency
-        detected_currency = gemini_result.get("currency", "$")
-        if detected_currency not in ["$", "₹", "€", "£"]:
-            detected_currency = "$"
-
-        # Validate travel category
-        detected_category = gemini_result.get("travel_category", "Other AS Cost")
-        if detected_category not in TRAVEL_CATEGORIES:
-            detected_category = "Other AS Cost"
-
-        # Merchant fallback: use Gemini's answer when Azure missed or had low confidence
-        gemini_merchant = (gemini_result.get("merchant_name") or "").strip()
         if needs_merchant and gemini_merchant and gemini_merchant.lower() != "unknown":
             data["merchant"] = gemini_merchant
             logging.info(f"Merchant fallback: Azure={merchant!r} → Gemini={gemini_merchant!r}")
