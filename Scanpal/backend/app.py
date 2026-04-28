@@ -2762,10 +2762,10 @@ def _generate_auto_alerts(db):
         nbd = _next_business_day(trip.return_date)
         if today >= nbd:
             alert_id = f"trip_end_{trip.id}"
-            exists = db.query(Alert).filter(Alert.id == alert_id).first()
-            if not exists:
-                first_name = (trip.traveler_name or "").split(" ")[0] or "there"
-                dest = trip.destination or trip.trip_purpose or "your trip"
+            existing = db.query(Alert).filter(Alert.id == alert_id).first()
+            first_name = (trip.traveler_name or "").split(" ")[0] or "there"
+            dest = trip.destination or trip.trip_purpose or "your trip"
+            if not existing:
                 db.add(Alert(
                     id=alert_id,
                     user_email=trip.traveler_email,
@@ -2775,6 +2775,11 @@ def _generate_auto_alerts(db):
                     message=f"Welcome back from {dest}, {first_name}! Please submit all your receipts within the next 15 business days so we can process your travel claim and get your reimbursement started.",
                     status="inbox",
                 ))
+            elif existing.status == "dismissed":
+                pass  # traveler confirmed receipts submitted — never regenerate
+            elif existing.status == "read":
+                # traveler marked Pending — bring back to inbox for daily reminder
+                existing.status = "inbox"
 
     # ── Pre-Travel Reminder ──
     upcoming_trips = db.query(Trip).filter(Trip.departure_date != None).all()
@@ -2920,8 +2925,8 @@ def update_alert_status(alert_id):
     """Update alert status: inbox, read, or completed."""
     data = request.get_json()
     new_status = (data.get("status") or "").strip().lower()
-    if new_status not in ("inbox", "read", "completed"):
-        return jsonify({"error": "status must be inbox, read, or completed"}), 400
+    if new_status not in ("inbox", "read", "completed", "dismissed"):
+        return jsonify({"error": "status must be inbox, read, completed, or dismissed"}), 400
 
     db = SessionLocal()
     try:

@@ -466,27 +466,59 @@ class _AlertsPageState extends State<AlertsPage> with SingleTickerProviderStateM
           const SizedBox(height: 12),
           Row(
             children: [
-              if (tab == _Tab.inbox)
-                _actionChip(
-                  icon: Icons.mark_email_read_rounded,
-                  label: 'Mark as Read',
-                  color: _purple,
-                  onTap: () => _updateStatus(alertId, 'read'),
-                ),
+              if (tab == _Tab.inbox) ...[
+                if (alert['type'] == 'trip_end_reminder') ...[
+                  _actionChip(
+                    icon: Icons.check_circle_rounded,
+                    label: 'Receipts Submitted',
+                    color: const Color(0xFF059669),
+                    onTap: () => _updateStatus(alertId, 'dismissed'),
+                  ),
+                  const SizedBox(width: 8),
+                  _actionChip(
+                    icon: Icons.schedule_rounded,
+                    label: 'Pending',
+                    color: const Color(0xFFF59E0B),
+                    onTap: () => _updateStatus(alertId, 'read'),
+                  ),
+                ] else
+                  _actionChip(
+                    icon: Icons.mark_email_read_rounded,
+                    label: 'Mark as Read',
+                    color: _purple,
+                    onTap: () => _updateStatus(alertId, 'read'),
+                  ),
+              ],
               if (tab == _Tab.read) ...[
-                _actionChip(
-                  icon: Icons.task_alt_rounded,
-                  label: 'Mark Completed',
-                  color: const Color(0xFF059669),
-                  onTap: () => _updateStatus(alertId, 'completed'),
-                ),
-                const SizedBox(width: 8),
-                _actionChip(
-                  icon: Icons.move_to_inbox_rounded,
-                  label: 'Back to Inbox',
-                  color: Colors.grey.shade600,
-                  onTap: () => _updateStatus(alertId, 'inbox'),
-                ),
+                if (alert['type'] == 'trip_end_reminder') ...[
+                  _actionChip(
+                    icon: Icons.check_circle_rounded,
+                    label: 'Receipts Submitted',
+                    color: const Color(0xFF059669),
+                    onTap: () => _updateStatus(alertId, 'dismissed'),
+                  ),
+                  const SizedBox(width: 8),
+                  _actionChip(
+                    icon: Icons.move_to_inbox_rounded,
+                    label: 'Back to Inbox',
+                    color: Colors.grey.shade600,
+                    onTap: () => _updateStatus(alertId, 'inbox'),
+                  ),
+                ] else ...[
+                  _actionChip(
+                    icon: Icons.task_alt_rounded,
+                    label: 'Mark Completed',
+                    color: const Color(0xFF059669),
+                    onTap: () => _updateStatus(alertId, 'completed'),
+                  ),
+                  const SizedBox(width: 8),
+                  _actionChip(
+                    icon: Icons.move_to_inbox_rounded,
+                    label: 'Back to Inbox',
+                    color: Colors.grey.shade600,
+                    onTap: () => _updateStatus(alertId, 'inbox'),
+                  ),
+                ],
               ],
               if (tab == _Tab.completed)
                 _actionChip(
