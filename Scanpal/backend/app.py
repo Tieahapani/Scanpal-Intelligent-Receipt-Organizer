@@ -2250,10 +2250,7 @@ def delete_trip(trip_id):
 @app.patch("/receipts/<receipt_id>")
 @require_auth
 def update_receipt(receipt_id):
-    """Admin can edit receipt fields: merchant, total, category, payment_method, meal_type."""
-    if g.user_role != "admin":
-        return jsonify({"error": "Admin only"}), 403
-
+    """Edit receipt fields. Travelers can edit their own receipts (merchant, category, trip_id). Admins can edit all fields."""
     data = request.get_json()
     db = SessionLocal()
     try:
@@ -2261,43 +2258,54 @@ def update_receipt(receipt_id):
         if not receipt:
             return jsonify({"error": "Receipt not found"}), 404
 
+        # Travelers can only edit their own receipts; admins can edit any
+        if g.user_role != "admin" and receipt.user_id != g.user_email:
+            return jsonify({"error": "Access denied"}), 403
+
+        # Fields editable by owner (traveler or admin)
         if "merchant" in data:
             receipt.merchant = (data["merchant"] or "").strip() or None
-        if "total" in data:
-            try:
-                receipt.total = float(data["total"])
-            except (ValueError, TypeError):
-                return jsonify({"error": "Invalid total"}), 400
         if "category" in data:
             cat = data["category"]
             if cat and cat not in TRAVEL_CATEGORIES:
                 return jsonify({"error": f"Invalid category. Must be one of: {TRAVEL_CATEGORIES}"}), 400
             receipt.travel_category = cat
             receipt.category = cat
-        if "payment_method" in data:
-            pm = data["payment_method"]
-            if pm not in ("personal", "corporate"):
-                return jsonify({"error": "payment_method must be 'personal' or 'corporate'"}), 400
-            receipt.payment_method = pm
-        if "meal_type" in data:
-            mt = (data["meal_type"] or "").strip().lower()
-            if mt and mt not in VALID_MEAL_TYPES:
-                return jsonify({"error": f"meal_type must be one of {VALID_MEAL_TYPES}"}), 400
-            receipt.meal_type = mt or None
+        if "trip_id" in data:
+            tid = data["trip_id"] or None
+            if tid and not db.query(Trip).filter(Trip.id == tid).first():
+                return jsonify({"error": "Trip not found"}), 404
+            receipt.trip_id = tid
 
-        # Notify traveler about the edit
-        edit_fields = [k for k in ("merchant", "total", "category", "payment_method", "meal_type") if k in data]
-        merchant = receipt.merchant or "a receipt"
-        traveler = db.query(User).filter(User.email == receipt.user_id).first()
-        first_name = ((traveler.name or "").split(" ")[0] if traveler else "") or "there"
-        change_str = ", ".join(edit_fields)
-        trip_id = receipt.trip_id if receipt.trip_id and db.query(Trip).filter(Trip.id == receipt.trip_id).first() else None
-        _notify_traveler(
-            db, receipt.user_id,
-            title=f"Admin edited your receipt from {merchant}",
-            message=f"Hi {first_name}, the admin updated {change_str} on your receipt from {merchant}.",
-            trip_id=trip_id,
-        )
+        # Admin-only fields
+        if g.user_role == "admin":
+            if "total" in data:
+                try:
+                    receipt.total = float(data["total"])
+                except (ValueError, TypeError):
+                    return jsonify({"error": "Invalid total"}), 400
+            if "payment_method" in data:
+                pm = data["payment_method"]
+                if pm not in ("personal", "corporate"):
+                    return jsonify({"error": "payment_method must be 'personal' or 'corporate'"}), 400
+                receipt.payment_method = pm
+            if "meal_type" in data:
+                mt = (data["meal_type"] or "").strip().lower()
+                if mt and mt not in VALID_MEAL_TYPES:
+                    return jsonify({"error": f"meal_type must be one of {VALID_MEAL_TYPES}"}), 400
+                receipt.meal_type = mt or None
+
+            # Notify traveler when admin edits
+            edit_fields = [k for k in ("merchant", "total", "category", "payment_method", "meal_type", "trip_id") if k in data]
+            merchant = receipt.merchant or "a receipt"
+            traveler = db.query(User).filter(User.email == receipt.user_id).first()
+            first_name = ((traveler.name or "").split(" ")[0] if traveler else "") or "there"
+            _notify_traveler(
+                db, receipt.user_id,
+                title=f"Admin edited your receipt from {merchant}",
+                message=f"Hi {first_name}, the admin updated {', '.join(edit_fields)} on your receipt from {merchant}.",
+                trip_id=receipt.trip_id,
+            )
 
         db.commit()
         return jsonify(receipt.to_dict()), 200
@@ -2775,11 +2783,8 @@ def _generate_auto_alerts(db):
                     message=f"Welcome back from {dest}, {first_name}! Please submit all your receipts within the next 15 business days so we can process your travel claim and get your reimbursement started.",
                     status="inbox",
                 ))
-            elif existing.status == "dismissed":
+            elif existing.status in ("dismissed", "read"):
                 pass  # traveler confirmed receipts submitted — never regenerate
-            elif existing.status == "read":
-                # traveler marked Pending — bring back to inbox for daily reminder
-                existing.status = "inbox"
 
     # ── Pre-Travel Reminder ──
     upcoming_trips = db.query(Trip).filter(Trip.departure_date != None).all()
@@ -2939,6 +2944,27 @@ def update_alert_status(alert_id):
         alert.status = new_status
         db.commit()
         return jsonify(alert.to_dict()), 200
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.delete("/alerts/<alert_id>")
+@require_auth
+def delete_alert(alert_id):
+    """Delete an alert (used when traveler marks a reminder as Pending — it regenerates on next scheduler run)."""
+    db = SessionLocal()
+    try:
+        alert = db.query(Alert).filter(Alert.id == alert_id).first()
+        if not alert:
+            return jsonify({"error": "Alert not found"}), 404
+        if alert.user_email != g.user_email:
+            return jsonify({"error": "Access denied"}), 403
+        db.delete(alert)
+        db.commit()
+        return jsonify({"deleted": True}), 200
     except Exception as e:
         db.rollback()
         return jsonify({"error": str(e)}), 500

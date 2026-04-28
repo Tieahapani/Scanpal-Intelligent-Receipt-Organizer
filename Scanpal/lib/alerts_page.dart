@@ -69,7 +69,18 @@ class _AlertsPageState extends State<AlertsPage> with SingleTickerProviderStateM
       await _api.updateAlertStatus(alertId, newStatus);
     } catch (e) {
       debugPrint('Failed to update alert status: $e');
-      _fetchAlerts(); // re-fetch on failure
+      _fetchAlerts();
+    }
+  }
+
+  Future<void> _deleteAlert(String alertId) async {
+    // Optimistic remove
+    setState(() => _alerts.removeWhere((a) => a['id'] == alertId));
+    try {
+      await _api.deleteAlert(alertId);
+    } catch (e) {
+      debugPrint('Failed to delete alert: $e');
+      _fetchAlerts();
     }
   }
 
@@ -83,79 +94,31 @@ class _AlertsPageState extends State<AlertsPage> with SingleTickerProviderStateM
     final type = alert['type'] ?? '';
     switch (type) {
       case 'trip_end_reminder':
-        return _AlertStyle(
-          icon: Icons.flight_land_rounded,
-          color: const Color(0xFFF59E0B),
-        );
+        return _AlertStyle(icon: Icons.flight_land_rounded, color: _gold);
       case 'pre_travel_reminder':
-        return _AlertStyle(
-          icon: Icons.flight_takeoff_rounded,
-          color: const Color(0xFF6366F1),
-        );
+        return _AlertStyle(icon: Icons.flight_takeoff_rounded, color: _gold);
       case 'status_change':
         final msg = (alert['message'] ?? '').toString().toLowerCase();
-        if (msg.contains('approved') || msg.contains('great news')) {
-          return _AlertStyle(
-            icon: Icons.check_circle_rounded,
-            color: const Color(0xFF10B981),
-          );
-        } else if (msg.contains('denied') || msg.contains('issue') || msg.contains('revision')) {
-          return _AlertStyle(
-            icon: Icons.error_rounded,
-            color: const Color(0xFFEF4444),
-          );
+        if (msg.contains('denied') || msg.contains('issue') || msg.contains('revision')) {
+          return _AlertStyle(icon: Icons.error_rounded, color: _gold);
         }
-        return _AlertStyle(
-          icon: Icons.update_rounded,
-          color: _purple,
-        );
+        return _AlertStyle(icon: Icons.update_rounded, color: _purple);
       case 'admin_comment':
-        return _AlertStyle(
-          icon: Icons.comment_rounded,
-          color: const Color(0xFF3B82F6),
-        );
+        return _AlertStyle(icon: Icons.comment_rounded, color: _purple);
       case 'traveler_action':
         final title = (alert['title'] ?? '').toString().toLowerCase();
-        if (title.contains('receipt uploaded') || title.contains('image attached')) {
-          return _AlertStyle(
-            icon: Icons.receipt_long_rounded,
-            color: const Color(0xFF10B981),
-          );
-        } else if (title.contains('trip') && title.contains('created')) {
-          return _AlertStyle(
-            icon: Icons.flight_takeoff_rounded,
-            color: const Color(0xFF3B82F6),
-          );
-        } else if (title.contains('deleted')) {
-          return _AlertStyle(
-            icon: Icons.delete_outline_rounded,
-            color: const Color(0xFFEF4444),
-          );
-        } else if (title.contains('updated')) {
-          return _AlertStyle(
-            icon: Icons.edit_rounded,
-            color: const Color(0xFFF59E0B),
-          );
+        if (title.contains('deleted')) {
+          return _AlertStyle(icon: Icons.delete_outline_rounded, color: _gold);
+        } else if (title.contains('receipt') || title.contains('image')) {
+          return _AlertStyle(icon: Icons.receipt_long_rounded, color: _purple);
         }
-        return _AlertStyle(
-          icon: Icons.person_rounded,
-          color: const Color(0xFF8B5CF6),
-        );
+        return _AlertStyle(icon: Icons.person_rounded, color: _purple);
       case 'trip_approved':
-        return _AlertStyle(
-          icon: Icons.check_circle_rounded,
-          color: const Color(0xFF10B981),
-        );
+        return _AlertStyle(icon: Icons.check_circle_rounded, color: _purple);
       case 'trip_discarded':
-        return _AlertStyle(
-          icon: Icons.cancel_rounded,
-          color: const Color(0xFFEF4444),
-        );
+        return _AlertStyle(icon: Icons.cancel_rounded, color: _gold);
       default:
-        return _AlertStyle(
-          icon: Icons.notifications_rounded,
-          color: _purple,
-        );
+        return _AlertStyle(icon: Icons.notifications_rounded, color: _purple);
     }
   }
 
@@ -471,15 +434,15 @@ class _AlertsPageState extends State<AlertsPage> with SingleTickerProviderStateM
                   _actionChip(
                     icon: Icons.check_circle_rounded,
                     label: 'Receipts Submitted',
-                    color: const Color(0xFF059669),
-                    onTap: () => _updateStatus(alertId, 'dismissed'),
+                    color: _purple,
+                    onTap: () => _updateStatus(alertId, 'read'),
                   ),
                   const SizedBox(width: 8),
                   _actionChip(
                     icon: Icons.schedule_rounded,
                     label: 'Pending',
-                    color: const Color(0xFFF59E0B),
-                    onTap: () => _updateStatus(alertId, 'read'),
+                    color: _gold,
+                    onTap: () {},
                   ),
                 ] else
                   _actionChip(
@@ -490,32 +453,18 @@ class _AlertsPageState extends State<AlertsPage> with SingleTickerProviderStateM
                   ),
               ],
               if (tab == _Tab.read) ...[
-                if (alert['type'] == 'trip_end_reminder') ...[
-                  _actionChip(
-                    icon: Icons.check_circle_rounded,
-                    label: 'Receipts Submitted',
-                    color: const Color(0xFF059669),
-                    onTap: () => _updateStatus(alertId, 'dismissed'),
-                  ),
-                  const SizedBox(width: 8),
-                  _actionChip(
-                    icon: Icons.move_to_inbox_rounded,
-                    label: 'Back to Inbox',
-                    color: Colors.grey.shade600,
-                    onTap: () => _updateStatus(alertId, 'inbox'),
-                  ),
-                ] else ...[
+                if (alert['type'] != 'trip_end_reminder') ...[
                   _actionChip(
                     icon: Icons.task_alt_rounded,
                     label: 'Mark Completed',
-                    color: const Color(0xFF059669),
+                    color: _purple,
                     onTap: () => _updateStatus(alertId, 'completed'),
                   ),
                   const SizedBox(width: 8),
                   _actionChip(
                     icon: Icons.move_to_inbox_rounded,
                     label: 'Back to Inbox',
-                    color: Colors.grey.shade600,
+                    color: _gold,
                     onTap: () => _updateStatus(alertId, 'inbox'),
                   ),
                 ],
@@ -524,7 +473,7 @@ class _AlertsPageState extends State<AlertsPage> with SingleTickerProviderStateM
                 _actionChip(
                   icon: Icons.move_to_inbox_rounded,
                   label: 'Move to Inbox',
-                  color: Colors.grey.shade600,
+                  color: _purple,
                   onTap: () => _updateStatus(alertId, 'inbox'),
                 ),
             ],

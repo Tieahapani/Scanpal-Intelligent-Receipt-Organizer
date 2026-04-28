@@ -539,6 +539,18 @@ class APIService {
     });
   }
 
+  Future<void> deleteAlert(String alertId) async {
+    return _withRetry(() async {
+      final uri = Uri.parse('$baseUrl/alerts/$alertId');
+      final headers = await _authHeaders();
+      final res = await http.delete(uri, headers: headers).timeout(_timeout);
+      debugPrint('DELETE /alerts/$alertId ${res.statusCode}');
+      if (res.statusCode != 200) {
+        throw Exception('Delete alert failed: ${res.statusCode}');
+      }
+    });
+  }
+
   Future<Map<String, dynamic>> approveReceipt(String receiptId, {String? comment}) async {
     return _withRetry(() async {
       final uri = Uri.parse('$baseUrl/receipts/$receiptId/approve');

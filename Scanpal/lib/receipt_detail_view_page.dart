@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'receipt.dart';
 import 'models/trip.dart';
@@ -23,9 +25,18 @@ class ReceiptDetailViewPage extends StatefulWidget {
 }
 
 class _ReceiptDetailViewPageState extends State<ReceiptDetailViewPage> {
+  static const _purple = Color(0xFF46166B);
+
   final _api = APIService();
   final _commentCtrl = TextEditingController();
   bool _isAdmin = false;
+  late Receipt _currentReceipt;
+  bool _attachingImage = false;
+
+  static const _categories = [
+    'Meals', 'Accommodation Cost', 'Flight Cost',
+    'Ground Transportation', 'Registration Cost', 'Other AS Cost',
+  ];
 
   static const _categoryLabels = {
     'Accommodation Cost': 'Accommodation',
@@ -35,7 +46,7 @@ class _ReceiptDetailViewPageState extends State<ReceiptDetailViewPage> {
     'Other AS Cost': 'Other AS Cost',
   };
 
-  Receipt get receipt => widget.receipt;
+  Receipt get receipt => _currentReceipt;
   List<Trip> get trips => widget.trips;
 
   String get _category {
@@ -52,6 +63,7 @@ class _ReceiptDetailViewPageState extends State<ReceiptDetailViewPage> {
   @override
   void initState() {
     super.initState();
+    _currentReceipt = widget.receipt;
     _checkAdmin();
   }
 
@@ -337,6 +349,279 @@ class _ReceiptDetailViewPageState extends State<ReceiptDetailViewPage> {
     );
   }
 
+  // ─── Edit Receipt Sheet ──────────────────────────────
+
+  void _showEditSheet() {
+    final merchantCtrl = TextEditingController(text: receipt.merchant ?? '');
+    String? selectedCategory = receipt.travelCategory ?? receipt.category;
+    String? selectedTripId = receipt.tripId;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.75,
+            maxChildSize: 0.92,
+            minChildSize: 0.5,
+            expand: false,
+            builder: (_, scrollCtrl) => Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: ListView(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                children: [
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 12),
+                      width: 36, height: 4,
+                      decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text('Edit Receipt', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(ctx),
+                        child: Container(
+                          width: 32, height: 32,
+                          decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
+                          alignment: Alignment.center,
+                          child: Icon(Icons.close, size: 18, color: Colors.grey.shade500),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  // Receipt Name
+                  const Text('RECEIPT NAME', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF9CA3AF), letterSpacing: 1.0)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: merchantCtrl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Starbucks, United Airlines...',
+                      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _purple, width: 1.5)),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // Category
+                  const Text('CATEGORY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF9CA3AF), letterSpacing: 1.0)),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _categories.map((cat) {
+                      final sel = selectedCategory == cat;
+                      return GestureDetector(
+                        onTap: () => setSheet(() => selectedCategory = cat),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: sel ? _purple : Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: sel ? _purple : Colors.grey.shade300),
+                          ),
+                          child: Text(
+                            cat,
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: sel ? Colors.white : const Color(0xFF374151)),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  // Trip
+                  const Text('TRIP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF9CA3AF), letterSpacing: 1.0)),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: selectedTripId,
+                        isExpanded: true,
+                        hint: Text('No trip', style: TextStyle(color: Colors.grey.shade400, fontSize: 14)),
+                        items: [
+                          DropdownMenuItem(value: null, child: Text('No trip', style: TextStyle(color: Colors.grey.shade500))),
+                          ...trips.map((t) => DropdownMenuItem(
+                            value: t.id,
+                            child: Text(t.displayTitle, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
+                          )),
+                        ],
+                        onChanged: (v) => setSheet(() => selectedTripId = v),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  // Save
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _saveReceiptEdits(
+                        merchant: merchantCtrl.text.trim(),
+                        category: selectedCategory,
+                        tripId: selectedTripId,
+                      );
+                    },
+                    child: Container(
+                      height: 52,
+                      decoration: BoxDecoration(color: _purple, borderRadius: BorderRadius.circular(14)),
+                      alignment: Alignment.center,
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check, size: 18, color: Colors.white),
+                          SizedBox(width: 8),
+                          Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveReceiptEdits({required String merchant, required String? category, required String? tripId}) async {
+    try {
+      final updated = await _api.updateReceipt(receipt.id, {
+        'merchant': merchant,
+        if (category != null) 'category': category,
+        'trip_id': tripId,
+      });
+      if (mounted) {
+        setState(() => _currentReceipt = updated);
+        _showToast('Changes saved successfully');
+      }
+    } catch (e) {
+      if (mounted) _showToast('Failed to save: $e', isError: true);
+    }
+  }
+
+  // ─── Add Image (placeholder receipts) ───────────────
+
+  void _showImagePickerSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 16),
+                const Text('Add Receipt Image', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                const SizedBox(height: 6),
+                Text('Scan or upload a photo of this receipt', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                const SizedBox(height: 20),
+                _imageOptionTile(
+                  icon: Icons.camera_alt_rounded,
+                  label: 'Scan Receipt',
+                  subtitle: 'Use your camera',
+                  onTap: () { Navigator.pop(ctx); _attachImage(ImageSource.camera); },
+                ),
+                const SizedBox(height: 10),
+                _imageOptionTile(
+                  icon: Icons.photo_library_rounded,
+                  label: 'Upload from Gallery',
+                  subtitle: 'Choose from photos',
+                  onTap: () { Navigator.pop(ctx); _attachImage(ImageSource.gallery); },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _imageOptionTile({required IconData icon, required String label, required String subtitle, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42, height: 42,
+              decoration: BoxDecoration(color: _purple.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 22, color: _purple),
+            ),
+            const SizedBox(width: 14),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+                Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+              ],
+            ),
+            const Spacer(),
+            Icon(Icons.chevron_right, color: Colors.grey.shade400),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _attachImage(ImageSource source) async {
+    final picker = ImagePicker();
+    final XFile? photo = await picker.pickImage(source: source, imageQuality: 85);
+    if (photo == null || !mounted) return;
+    setState(() => _attachingImage = true);
+    try {
+      final result = await _api.attachReceiptImage(File(photo.path), receiptId: receipt.id);
+      if (mounted) {
+        setState(() {
+          _currentReceipt = result.receipt;
+          _attachingImage = false;
+        });
+        _showToast('Image added successfully');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _attachingImage = false);
+        _showToast('Failed to attach image: $e', isError: true);
+      }
+    }
+  }
+
   // ─── Admin Action Buttons ────────────────────────────
 
   Widget _buildAdminActions() {
@@ -447,6 +732,20 @@ class _ReceiptDetailViewPageState extends State<ReceiptDetailViewPage> {
                       ),
                     ),
                     GestureDetector(
+                      onTap: _showEditSheet,
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(Icons.edit_outlined, size: 16, color: Colors.grey.shade600),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
                       onTap: () => _confirmDelete(),
                       child: Container(
                         width: 32,
@@ -473,19 +772,15 @@ class _ReceiptDetailViewPageState extends State<ReceiptDetailViewPage> {
               children: [
                 // Receipt Image
                 GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ReceiptDetailPage(receipt: receipt),
-                      ),
-                    );
-                  },
+                  onTap: receipt.isPlaceholder
+                      ? _showImagePickerSheet
+                      : () => Navigator.push(context, MaterialPageRoute(builder: (_) => ReceiptDetailPage(receipt: receipt))),
                   child: Container(
                     height: 192,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
+                      color: receipt.isPlaceholder ? Colors.white : Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(16),
+                      border: receipt.isPlaceholder ? Border.all(color: Colors.grey.shade200, strokeAlign: BorderSide.strokeAlignInside) : null,
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.08),
@@ -498,18 +793,19 @@ class _ReceiptDetailViewPageState extends State<ReceiptDetailViewPage> {
                     child: Stack(
                       children: [
                         _buildDetailImage(context),
-                        Positioned(
-                          bottom: 8,
-                          right: 8,
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(8),
+                        if (!receipt.isPlaceholder)
+                          Positioned(
+                            bottom: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.fullscreen, size: 16, color: Colors.white),
                             ),
-                            child: const Icon(Icons.fullscreen, size: 16, color: Colors.white),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -635,6 +931,34 @@ class _ReceiptDetailViewPageState extends State<ReceiptDetailViewPage> {
   }
 
   Widget _buildDetailImage(BuildContext context) {
+    if (_attachingImage) {
+      return Container(
+        color: Colors.white,
+        alignment: Alignment.center,
+        child: const CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF46166B)),
+        ),
+      );
+    }
+
+    if (receipt.isPlaceholder) {
+      return Container(
+        color: Colors.white,
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add_photo_alternate_outlined, size: 44, color: Colors.grey.shade400),
+            const SizedBox(height: 8),
+            Text(
+              'Add Image',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey.shade400),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (receipt.imageUrl == null) {
       return Container(
         color: Colors.grey.shade100,
