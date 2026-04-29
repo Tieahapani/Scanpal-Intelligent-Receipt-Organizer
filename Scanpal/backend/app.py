@@ -207,6 +207,19 @@ def health():
     return {"status": "ok", "provider": "azure"}, 200
 
 
+@app.get("/debug/smtp")
+def debug_smtp():
+    """Temporary endpoint to test SMTP connectivity from Render."""
+    import smtplib
+    try:
+        s = smtplib.SMTP("smtp.gmail.com", 587, timeout=10)
+        s.starttls()
+        s.quit()
+        return {"smtp": "reachable"}, 200
+    except Exception as e:
+        return {"smtp": "failed", "error": str(e)}, 500
+
+
 @app.get("/departments")
 def get_departments():
     """Return the list of department options from Notion's select field."""
