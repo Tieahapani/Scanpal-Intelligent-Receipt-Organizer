@@ -694,7 +694,12 @@ class _ReceiptDetailViewPageState extends State<ReceiptDetailViewPage> {
         ? DateFormat('MMM d, y').format(receipt.date!)
         : 'Unknown';
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) Navigator.pop(context, _currentReceipt);
+      },
+      child: Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       body: Column(
         children: [
@@ -708,7 +713,7 @@ class _ReceiptDetailViewPageState extends State<ReceiptDetailViewPage> {
                 child: Row(
                   children: [
                     GestureDetector(
-                      onTap: () => Navigator.pop(context),
+                      onTap: () => Navigator.pop(context, _currentReceipt),
                       child: Container(
                         width: 32,
                         height: 32,
@@ -927,6 +932,7 @@ class _ReceiptDetailViewPageState extends State<ReceiptDetailViewPage> {
           if (_isAdmin) _buildAdminActions(),
         ],
       ),
+    ),
     );
   }
 

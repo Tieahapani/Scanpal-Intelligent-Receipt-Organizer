@@ -1339,11 +1339,21 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
   final _currency = NumberFormat.simpleCurrency();
   final _api = APIService();
   String? _token;
+  late List<Receipt> _receipts;
 
   @override
   void initState() {
     super.initState();
     _loadToken();
+    _receipts = List.of(widget.receipts);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TripReceiptsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.receipts != oldWidget.receipts) {
+      _receipts = List.of(widget.receipts);
+    }
   }
 
   Future<void> _loadToken() async {
@@ -1351,7 +1361,7 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
     if (mounted) setState(() => _token = token);
   }
 
-  List<Receipt> get receipts => widget.receipts;
+  List<Receipt> get receipts => _receipts;
   Trip get trip => widget.trip;
 
   double get _totalAmount {
@@ -1511,13 +1521,23 @@ class _TripReceiptsPageState extends State<_TripReceiptsPage> {
 
     return GestureDetector(
       onTap: () async {
-          await Navigator.push(
+          final result = await Navigator.push<dynamic>(
             context,
             MaterialPageRoute(builder: (_) => ReceiptDetailViewPage(
               receipt: receipt,
               trips: [widget.trip],
             )),
           );
+          if (result is Receipt) {
+            setState(() {
+              final idx = _receipts.indexWhere((r) => r.id == result.id);
+              if (idx != -1) _receipts[idx] = result;
+            });
+          } else if (result == 'deleted') {
+            setState(() {
+              _receipts.removeWhere((r) => r.id == receipt.id);
+            });
+          }
           widget.onRefresh?.call();
       },
       child: Container(

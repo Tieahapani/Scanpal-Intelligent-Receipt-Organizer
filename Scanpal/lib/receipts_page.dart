@@ -31,6 +31,7 @@ class _ReceiptsPageState extends State<ReceiptsPage> {
   Receipt? _selectedReceipt;
   bool _showPicker = false;
   late int _pickerYear;
+  late List<Receipt> _receipts;
 
   static const _categories = [
     'All',
@@ -60,10 +61,19 @@ class _ReceiptsPageState extends State<ReceiptsPage> {
     _selectedMonth = now.month;
     _selectedYear = now.year;
     _pickerYear = now.year;
+    _receipts = List.of(widget.receipts);
+  }
+
+  @override
+  void didUpdateWidget(covariant ReceiptsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.receipts != oldWidget.receipts) {
+      _receipts = List.of(widget.receipts);
+    }
   }
 
   List<Receipt> get _filtered {
-    return widget.receipts.where((r) {
+    return _receipts.where((r) {
       final d = r.date;
       if (d == null) return false;
       final matchesMonth = d.month == _selectedMonth && d.year == _selectedYear;
@@ -210,7 +220,7 @@ class _ReceiptsPageState extends State<ReceiptsPage> {
                     ),
                   ),
                   Text(
-                    '${widget.receipts.length} total receipts',
+                    '${_receipts.length} total receipts',
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w400,
@@ -517,13 +527,23 @@ class _ReceiptsPageState extends State<ReceiptsPage> {
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
       child: GestureDetector(
         onTap: () async {
-            await Navigator.push(
+            final result = await Navigator.push<dynamic>(
               context,
               MaterialPageRoute(builder: (_) => ReceiptDetailViewPage(
                 receipt: receipt,
                 trips: widget.trips,
               )),
             );
+            if (result is Receipt) {
+              setState(() {
+                final idx = _receipts.indexWhere((r) => r.id == result.id);
+                if (idx != -1) _receipts[idx] = result;
+              });
+            } else if (result == 'deleted') {
+              setState(() {
+                _receipts.removeWhere((r) => r.id == receipt.id);
+              });
+            }
             widget.onRefresh?.call();
         },
         child: Container(
