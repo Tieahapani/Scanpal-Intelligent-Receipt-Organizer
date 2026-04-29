@@ -15,13 +15,13 @@ SMTP_PASS = os.getenv("SMTP_PASS")
 
 def send_otp_email(to_email: str, otp_code: str):
     """Send a 6-digit OTP code to the given email address."""
-    subject = "ScanPal - Your Verification Code"
+    subject = "ASGo - Your Verification Code"
     html_body = f"""\
 <div style="font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto; padding: 20px;">
-    <h2 style="color: #1565C0;">ScanPal Verification</h2>
+    <h2 style="color: #46166B;">ASGo Verification</h2>
     <p>Your verification code is:</p>
     <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px;
-                color: #1565C0; padding: 16px; background: #F5F5F5;
+                color: #46166B; padding: 16px; background: #F5F5F5;
                 border-radius: 8px; text-align: center; margin: 16px 0;">
         {otp_code}
     </div>
@@ -34,7 +34,7 @@ def send_otp_email(to_email: str, otp_code: str):
     msg["Subject"] = subject
     msg["From"] = SMTP_USER
     msg["To"] = to_email
-    msg.attach(MIMEText(f"Your ScanPal verification code is: {otp_code}", "plain"))
+    msg.attach(MIMEText(f"Your ASGo verification code is: {otp_code}", "plain"))
     msg.attach(MIMEText(html_body, "html"))
 
     with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
