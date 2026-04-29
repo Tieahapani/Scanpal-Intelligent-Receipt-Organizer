@@ -1,21 +1,19 @@
 import os
-import smtplib
+import json
 import logging
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import urllib.request
+import urllib.error
 from dotenv import load_dotenv
 
 load_dotenv()
 
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASS = os.getenv("SMTP_PASS")
+BREVO_API_KEY = os.getenv("BREVO_API_KEY")
+SENDER_EMAIL = os.getenv("SENDER_EMAIL", "hapanitiea6@gmail.com")
+SENDER_NAME = os.getenv("SENDER_NAME", "ASGo")
 
 
 def send_otp_email(to_email: str, otp_code: str):
-    """Send a 6-digit OTP code to the given email address."""
-    subject = "ASGo - Your Verification Code"
+    """Send a 6-digit OTP code via Brevo REST API (HTTPS)."""
     html_body = f"""\
 <div style="font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto; padding: 20px;">
     <h2 style="color: #46166B;">ASGo Verification</h2>
@@ -30,16 +28,28 @@ def send_otp_email(to_email: str, otp_code: str):
     </p>
 </div>"""
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = SMTP_USER
-    msg["To"] = to_email
-    msg.attach(MIMEText(f"Your ASGo verification code is: {otp_code}", "plain"))
-    msg.attach(MIMEText(html_body, "html"))
+    payload = json.dumps({
+        "sender": {"name": SENDER_NAME, "email": SENDER_EMAIL},
+        "to": [{"email": to_email}],
+        "subject": "ASGo - Your Verification Code",
+        "htmlContent": html_body,
+    }).encode("utf-8")
 
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASS)
-        server.sendmail(SMTP_USER, to_email, msg.as_string())
+    req = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=payload,
+        headers={
+            "api-key": BREVO_API_KEY,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
 
-    logging.info(f"OTP email sent to {to_email}")
+    try:
+        resp = urllib.request.urlopen(req, timeout=15)
+        logging.info(f"OTP email sent to {to_email} via Brevo (status {resp.status})")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        logging.error(f"Brevo API error {e.code}: {body}")
+        raise Exception(f"Failed to send verification email: {body}")
