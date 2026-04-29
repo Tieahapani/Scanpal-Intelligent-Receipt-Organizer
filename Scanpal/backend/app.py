@@ -209,15 +209,29 @@ def health():
 
 @app.get("/debug/smtp")
 def debug_smtp():
-    """Temporary endpoint to test SMTP connectivity from Render."""
+    """Temporary endpoint to test SMTP and HTTPS connectivity from Render."""
     import smtplib
+    import urllib.request
+    results = {}
+
+    # Test SMTP (port 587)
     try:
         s = smtplib.SMTP("smtp.gmail.com", 587, timeout=10)
         s.starttls()
         s.quit()
-        return {"smtp": "reachable"}, 200
+        results["smtp"] = "reachable"
     except Exception as e:
-        return {"smtp": "failed", "error": str(e)}, 500
+        results["smtp"] = f"failed: {e}"
+
+    # Test HTTPS (port 443) — same port Resend API uses
+    try:
+        req = urllib.request.urlopen("https://api.resend.com", timeout=10)
+        results["https_resend"] = f"reachable (status {req.status})"
+    except Exception as e:
+        results["https_resend"] = f"failed: {e}"
+
+    status = 200 if "reachable" in results.get("https_resend", "") else 500
+    return results, status
 
 
 @app.get("/departments")
