@@ -76,30 +76,46 @@ class _AdminHomePageState extends State<AdminHomePage> {
     return counts;
   }
 
+  void _addTripToSummary(Map<String, _TravelerSummary> map, String email, Trip trip, {String? name, String? department}) {
+    final existing = map[email];
+    if (existing != null) {
+      map[email] = _TravelerSummary(
+        name: (name != null && name.isNotEmpty) ? name : existing.name,
+        email: email,
+        department: department ?? existing.department,
+        tripCount: existing.tripCount + 1,
+        totalSpent: existing.totalSpent + trip.totalExpenses,
+        receiptCount: 0,
+      );
+    } else {
+      map[email] = _TravelerSummary(
+        name: name ?? email,
+        email: email,
+        department: department,
+        tripCount: 1,
+        totalSpent: trip.totalExpenses,
+        receiptCount: 0,
+      );
+    }
+  }
+
   List<_TravelerSummary> get _travelerSummaries {
     final Map<String, _TravelerSummary> map = {};
     for (final trip in _trips) {
+      // Count for primary traveler
       final email = trip.travelerEmail;
-      if (email.isEmpty) continue;
-      final existing = map[email];
-      if (existing != null) {
-        map[email] = _TravelerSummary(
-          name: trip.travelerName.isNotEmpty ? trip.travelerName : existing.name,
-          email: email,
-          department: trip.department ?? existing.department,
-          tripCount: existing.tripCount + 1,
-          totalSpent: existing.totalSpent + trip.totalExpenses,
-          receiptCount: 0,
-        );
-      } else {
-        map[email] = _TravelerSummary(
-          name: trip.travelerName,
-          email: email,
-          department: trip.department,
-          tripCount: 1,
-          totalSpent: trip.totalExpenses,
-          receiptCount: 0,
-        );
+      if (email.isNotEmpty) {
+        _addTripToSummary(map, email, trip,
+          name: trip.travelerName, department: trip.department);
+      }
+      // Count for co-travelers
+      if (trip.travelers != null && trip.travelers!.isNotEmpty) {
+        for (final coEmail in trip.travelers!.split(',')) {
+          final trimmed = coEmail.trim();
+          if (trimmed.isNotEmpty && trimmed != email) {
+            _addTripToSummary(map, trimmed, trip, department: trip.department);
+          }
+        }
       }
     }
     final receiptCounts = _receiptsPerTraveler;
@@ -1920,7 +1936,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
     return GestureDetector(
       onTap: () async {
         final travelerTrips = _trips
-            .where((t) => t.travelerEmail == traveler.email)
+            .where((t) =>
+              t.travelerEmail == traveler.email ||
+              (t.travelers != null && t.travelers!.contains(traveler.email)))
             .toList();
         final summary = TravelerSummary(
           name: traveler.name,

@@ -1169,15 +1169,14 @@ def _upsert_trip(db, parsed, traveler_email):
         existing.advance = parsed.get("advance", 0.0)
         existing.claim = parsed.get("claim", 0.0)
         existing.synced_at = datetime.now(timezone.utc)
-        # Only fill these from Notion if local value is empty
-        # — protects edits made via the app
-        if parsed.get("trip_purpose") and not existing.trip_purpose:
+        # Always sync these fields from Notion (source of truth)
+        if parsed.get("trip_purpose"):
             existing.trip_purpose = parsed["trip_purpose"]
-        if parsed.get("destination") and not existing.destination:
+        if parsed.get("destination"):
             existing.destination = parsed["destination"]
-        if parsed.get("departure_date") and not existing.departure_date:
+        if parsed.get("departure_date"):
             existing.departure_date = parsed["departure_date"]
-        if parsed.get("return_date") and not existing.return_date:
+        if parsed.get("return_date"):
             existing.return_date = parsed["return_date"]
         if parsed.get("status"):
             existing.status = parsed["status"]

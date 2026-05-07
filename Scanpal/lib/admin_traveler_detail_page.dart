@@ -59,7 +59,8 @@ class _AdminTravelerDetailPageState extends State<AdminTravelerDetailPage> {
     try {
       final trips = await _api.fetchTrips(sync: false);
       final travelerTrips = trips.where(
-        (t) => t.travelerEmail == widget.traveler.email,
+        (t) => t.travelerEmail == widget.traveler.email ||
+          (t.travelers != null && t.travelers!.contains(widget.traveler.email)),
       ).toList();
       final receipts = await _api.fetchReceipts();
       final travelerReceipts = receipts.where(
